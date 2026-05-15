@@ -1,65 +1,191 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { MapPin, Clock, Euro, Bell, ChevronRight, CheckCircle } from 'lucide-react'
+import CitySearch from '@/components/CitySearch'
+import { CITIES } from '@/lib/cities'
 
-export default function Home() {
+const FEATURED_CITIES = CITIES.slice(0, 8)
+
+const HOW_IT_WORKS = [
+  {
+    icon: MapPin,
+    title: 'Stadt wählen',
+    desc: 'Gib deine Stadt oder deinen Bezirk ein. Wir zeigen dir alle freien Parzellen und Vereine in deiner Nähe.',
+  },
+  {
+    icon: Clock,
+    title: 'Wartelisten vergleichen',
+    desc: 'Sieh auf einen Blick welche Vereine ihre Warteliste geöffnet haben — und wie lang die Warteschlange ist.',
+  },
+  {
+    icon: Euro,
+    title: 'Ablöse verstehen',
+    desc: 'Vergleiche Ablöse-Preise in deiner Stadt. Erkenne sofort ob ein Angebot fair ist oder überteuert.',
+  },
+  {
+    icon: Bell,
+    title: 'Alert setzen',
+    desc: 'Lass dich benachrichtigen sobald in deiner Stadt ein Garten frei wird — nie wieder eine Chance verpassen.',
+  },
+]
+
+const STATS = [
+  { value: '13.155', label: 'Kleingartenvereine' },
+  { value: '900.000+', label: 'Kleingärten deutschlandweit' },
+  { value: '5 Mio.', label: 'Menschen suchen einen Garten' },
+  { value: '€2.800', label: 'Durchschnittliche Ablöse' },
+]
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <>
+      {/* Hero */}
+      <section
+        id="suche"
+        className="relative py-20 md:py-28 px-4 text-center overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 60%, #40916c 100%)' }}
+      >
+        <div className="relative max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full mb-6 text-green-200 border border-green-700/50 bg-green-900/30">
+            <CheckCircle size={13} />
+            Neu: Wartelisten-Status für 13.000+ Vereine
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
+            Deinen Kleingarten finden.<br />
+            <span style={{ color: '#95d5b2' }}>Einfach. Vollständig. Kostenlos.</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-green-200 text-lg mb-10 max-w-xl mx-auto">
+            Freie Parzellen, offene Wartelisten und Ablöse-Preise — alles auf einer Plattform. Für alle deutschen Städte.
+          </p>
+          <CitySearch />
+          <p className="text-green-300/70 text-sm mt-4">
+            Beliebte Städte:{' '}
+            {['berlin', 'hamburg', 'muenchen', 'koeln', 'frankfurt'].map((slug, i, arr) => {
+              const city = CITIES.find(c => c.slug === slug)
+              return city ? (
+                <span key={slug}>
+                  <Link
+                    href={`/kleingarten-${slug}`}
+                    className="underline underline-offset-2 hover:text-green-200 transition-colors"
+                  >
+                    {city.name}
+                  </Link>
+                  {i < arr.length - 1 ? ', ' : ''}
+                </span>
+              ) : null
+            })}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Stats bar */}
+      <section className="bg-white border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+          {STATS.map(stat => (
+            <div key={stat.label}>
+              <div className="text-2xl font-bold" style={{ color: 'var(--green-primary)' }}>{stat.value}</div>
+              <div className="text-sm text-gray-500 mt-1">{stat.label}</div>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
-  );
+      </section>
+
+      {/* How it works */}
+      <section className="py-16 px-4 max-w-5xl mx-auto">
+        <h2 className="text-2xl font-bold text-center text-gray-900 mb-3">So funktioniert parzelle-finden.de</h2>
+        <p className="text-center text-gray-500 mb-12 max-w-xl mx-auto">
+          Wir aggregieren Daten aus hunderten Quellen, damit du nicht mehr selbst suchen musst.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {HOW_IT_WORKS.map((step, i) => (
+            <div key={step.title} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                style={{ backgroundColor: 'var(--green-pale)' }}
+              >
+                <step.icon size={20} style={{ color: 'var(--green-primary)' }} />
+              </div>
+              <div className="text-xs font-medium text-gray-400 mb-1">Schritt {i + 1}</div>
+              <h3 className="font-semibold text-gray-900 mb-2">{step.title}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* City grid */}
+      <section className="py-16 px-4 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-bold text-gray-900">Beliebte Städte</h2>
+          <Link href="/vereine" className="text-sm font-medium flex items-center gap-1 hover:underline" style={{ color: 'var(--green-primary)' }}>
+            Alle Städte <ChevronRight size={16} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {FEATURED_CITIES.map(city => (
+            <Link
+              key={city.slug}
+              href={`/kleingarten-${city.slug}`}
+              className="group bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-gray-900 group-hover:text-green-800 transition-colors">{city.name}</h3>
+                  <p className="text-xs text-gray-400">{city.bundesland}</p>
+                </div>
+                <MapPin size={16} className="text-gray-300 mt-0.5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Inserate</span>
+                  <span className="font-medium text-gray-900">{city.listing_count}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Vereine</span>
+                  <span className="font-medium text-gray-900">{city.verein_count}</span>
+                </div>
+                {city.avg_abloese && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Ø Ablöse</span>
+                    <span className="font-medium text-gray-900">€{city.avg_abloese.toLocaleString('de-DE')}</span>
+                  </div>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Alert CTA */}
+      <section className="py-16 px-4">
+        <div
+          className="max-w-2xl mx-auto rounded-3xl p-10 text-center text-white"
+          style={{ background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)' }}
+        >
+          <Bell size={32} className="mx-auto mb-4 text-green-300" />
+          <h2 className="text-2xl font-bold mb-3">Keine freie Parzelle verpassen</h2>
+          <p className="text-green-200 mb-8 max-w-md mx-auto">
+            Trag dich ein und wir benachrichtigen dich per E-Mail, sobald in deiner Stadt ein Garten verfügbar ist.
+          </p>
+          <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <input
+              type="email"
+              placeholder="deine@email.de"
+              className="flex-1 px-4 py-3 rounded-xl text-gray-900 bg-white focus:outline-none"
+            />
+            <input
+              type="text"
+              placeholder="Stadt"
+              className="sm:w-32 px-4 py-3 rounded-xl text-gray-900 bg-white focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-xl font-medium text-green-900 bg-green-300 hover:bg-green-200 transition-colors whitespace-nowrap"
+            >
+              Alert setzen
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
+  )
 }
