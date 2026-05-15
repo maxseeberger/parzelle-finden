@@ -54,10 +54,51 @@ interface ParsedListing {
   posted_at: string
 }
 
+const GERMAN_CITIES = [
+  'Berlin', 'Hamburg', 'München', 'Köln', 'Frankfurt', 'Stuttgart', 'Düsseldorf',
+  'Leipzig', 'Dortmund', 'Essen', 'Bremen', 'Dresden', 'Hannover', 'Nürnberg',
+  'Duisburg', 'Bochum', 'Wuppertal', 'Bielefeld', 'Bonn', 'Münster', 'Karlsruhe',
+  'Mannheim', 'Augsburg', 'Wiesbaden', 'Gelsenkirchen', 'Aachen', 'Braunschweig',
+  'Kiel', 'Chemnitz', 'Halle', 'Magdeburg', 'Freiburg', 'Erfurt', 'Rostock',
+  'Kassel', 'Mainz', 'Saarbrücken', 'Potsdam', 'Lübeck', 'Oldenburg', 'Osnabrück',
+  'Heidelberg', 'Darmstadt', 'Regensburg', 'Paderborn', 'Würzburg', 'Ingolstadt',
+  'Wolfsburg', 'Ulm', 'Heilbronn', 'Pforzheim', 'Göttingen', 'Recklinghausen',
+  'Bottrop', 'Remscheid', 'Bremerhaven', 'Oberhausen', 'Hagen', 'Hamm',
+  'Mülheim', 'Krefeld', 'Leverkusen', 'Solingen', 'Herne', 'Neuss',
+]
+
+function extractCityFromHtml(snippet: string): { city: string; plz?: string } {
+  // Kleinanzeigen shows location as "PLZ Stadtname" in various elements
+  const plzCity = snippet.match(/(\d{5})\s+([A-ZÄÖÜa-zäöüß][A-ZÄÖÜa-zäöüß\s\-]{2,30})/)
+  if (plzCity) return { plz: plzCity[1], city: plzCity[2].trim() }
+
+  // Location without PLZ: look for city-like text in location elements
+  const locationEl = snippet.match(/(?:aditem-main--top--left|locality|location)[^>]*>([^<]{3,40})</)
+  if (locationEl) {
+    const raw = locationEl[1].trim()
+    const plzOnly = raw.match(/^(\d{5})\s+(.+)/)
+    if (plzOnly) return { plz: plzOnly[1], city: plzOnly[2].trim() }
+    if (raw.length > 2 && !/\d{4,}/.test(raw)) return { city: raw }
+  }
+
+  return { city: 'Unbekannt' }
+}
+
+function extractCityFromTitle(title: string): string | undefined {
+  const lower = title.toLowerCase()
+  for (const city of GERMAN_CITIES) {
+    if (lower.includes(city.toLowerCase())) return city
+  }
+  // Try "in Stadtname" or "bei Stadtname" pattern
+  const inCity = title.match(/\b(?:in|bei|nahe|nähe)\s+([A-ZÄÖÜ][a-zA-ZÄÖÜäöüß\-]{3,20})/i)
+  if (inCity) return inCity[1]
+  return undefined
+}
+
 function parseListings(html: string): ParsedListing[] {
   const listings: ParsedListing[] = []
 
-  // Try JSON-LD first (most reliable)
+  // Try JSON-LD first (most reliable for title/url/price)
   const jsonLdMatches = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
   for (const match of jsonLdMatches) {
     try {
@@ -69,11 +110,18 @@ function parseListings(html: string): ParsedListing[] {
         const idMatch = String(el.url).match(/\/(\d+)\.html/)
         if (!idMatch) continue
         const price = el.offers?.price ? parseInt(String(el.offers.price).replace(/\D/g, '')) : undefined
+        const title = String(el.name).trim()
+
+        // JSON-LD on list pages rarely has address — extract from title as fallback
+        const city = el.address?.addressLocality
+          ?? extractCityFromTitle(title)
+          ?? 'Unbekannt'
+
         listings.push({
           external_id: idMatch[1],
-          title: String(el.name).trim(),
+          title,
           price_abloese: price && price > 0 ? price : undefined,
-          city: el.address?.addressLocality ?? 'Unbekannt',
+          city,
           plz: el.address?.postalCode,
           contact_url: `https://www.kleinanzeigen.de/s-anzeige/${idMatch[1]}.html`,
           posted_at: el.datePosted ?? new Date().toISOString(),
@@ -90,16 +138,18 @@ function parseListings(html: string): ParsedListing[] {
     const title = m[3].replace(/<[^>]+>/g, '').trim()
     if (!title) continue
 
-    const plzMatch = html.slice(m.index ?? 0, (m.index ?? 0) + 800).match(/(\d{5})\s+([A-Za-zÄÖÜäöüß]+)/)
-    const priceMatch = html.slice(m.index ?? 0, (m.index ?? 0) + 800).match(/(\d[\d.]*)\s*€/)
+    const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
+    const { city, plz } = extractCityFromHtml(snippet)
+    const cityFinal = city !== 'Unbekannt' ? city : (extractCityFromTitle(title) ?? 'Unbekannt')
+    const priceMatch = snippet.match(/(\d[\d.]*)\s*€/)
     const price = priceMatch ? parseInt(priceMatch[1].replace('.', '')) : undefined
 
     listings.push({
       external_id: m[1],
       title,
       price_abloese: price && price > 0 && price < 100000 ? price : undefined,
-      city: plzMatch?.[2] ?? 'Unbekannt',
-      plz: plzMatch?.[1],
+      city: cityFinal,
+      plz,
       contact_url: `https://www.kleinanzeigen.de${m[2]}`,
       posted_at: new Date().toISOString(),
     })
