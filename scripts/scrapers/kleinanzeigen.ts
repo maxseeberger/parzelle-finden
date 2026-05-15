@@ -107,10 +107,37 @@ function extractCityFromUrl(url: string): string | undefined {
   return undefined
 }
 
+function buildAdidLocationMap(html: string): Map<string, { city: string; plz?: string }> {
+  // Build a map of adid → {city, plz} by scanning each article card in the HTML.
+  // Each card has data-adid="..." and somewhere nearby a "PLZ Stadtname" text.
+  const map = new Map<string, { city: string; plz?: string }>()
+  const cardPattern = /data-adid="(\d+)"([\s\S]{0,2000}?)(?=data-adid="|$)/g
+  let m: RegExpExecArray | null
+  while ((m = cardPattern.exec(html)) !== null) {
+    const adid = m[1]
+    const snippet = m[2]
+    // Prefer explicit PLZ + city
+    const plzCity = snippet.match(/(\d{5})\s+([A-ZÄÖÜa-zäöüß][A-ZÄÖÜa-zäöüß\s\-]{1,25})(?:<|\s*[,·])/)
+    if (plzCity) {
+      map.set(adid, { plz: plzCity[1], city: plzCity[2].trim() })
+      continue
+    }
+    // Fallback: look for PLZ anywhere in snippet
+    const plzOnly = snippet.match(/(\d{5})/)
+    if (plzOnly) {
+      map.set(adid, { plz: plzOnly[1], city: 'Unbekannt' })
+    }
+  }
+  return map
+}
+
 function parseListings(html: string): ParsedListing[] {
   const listings: ParsedListing[] = []
 
-  // Try JSON-LD first (most reliable for title/url/price)
+  // Pre-build location map from HTML cards so we have city data for every ad
+  const locationMap = buildAdidLocationMap(html)
+
+  // Parse JSON-LD for title/price/date (most reliable structured data)
   const jsonLdMatches = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
   for (const match of jsonLdMatches) {
     try {
@@ -121,22 +148,23 @@ function parseListings(html: string): ParsedListing[] {
         if (!el?.name || !el?.url) continue
         const idMatch = String(el.url).match(/\/(\d+)\.html/)
         if (!idMatch) continue
+        const adid = idMatch[1]
         const price = el.offers?.price ? parseInt(String(el.offers.price).replace(/\D/g, '')) : undefined
         const title = String(el.name).trim()
 
-        // JSON-LD on list pages rarely has address — extract from URL slug or title
+        const loc = locationMap.get(adid)
         const city = el.address?.addressLocality
-          ?? extractCityFromUrl(String(el.url))
+          ?? (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
           ?? extractCityFromText(title)
           ?? 'Unbekannt'
 
         listings.push({
-          external_id: idMatch[1],
+          external_id: adid,
           title,
           price_abloese: price && price > 0 ? price : undefined,
           city,
-          plz: el.address?.postalCode,
-          contact_url: `https://www.kleinanzeigen.de/s-anzeige/${idMatch[1]}.html`,
+          plz: el.address?.postalCode ?? loc?.plz,
+          contact_url: `https://www.kleinanzeigen.de/s-anzeige/${adid}.html`,
           posted_at: el.datePosted ?? new Date().toISOString(),
         })
       }
@@ -145,15 +173,17 @@ function parseListings(html: string): ParsedListing[] {
 
   if (listings.length > 0) return listings
 
-  // Fallback: parse article[data-adid] elements
+  // Fallback: parse article[data-adid] elements directly
   const articleMatches = [...html.matchAll(/data-adid="(\d+)"[\s\S]*?<a[^>]+href="(\/s-anzeige\/[^"]+)"[\s\S]*?class="[^"]*text-module-begin[^"]*"[^>]*>([\s\S]*?)<\/a>/g)]
   for (const m of articleMatches) {
     const title = m[3].replace(/<[^>]+>/g, '').trim()
     if (!title) continue
 
+    const loc = locationMap.get(m[1])
+    const city = (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
+      ?? extractCityFromText(title)
+      ?? 'Unbekannt'
     const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
-    const { city, plz } = extractCityFromHtml(snippet)
-    const cityFinal = city !== 'Unbekannt' ? city : (extractCityFromUrl(`https://www.kleinanzeigen.de${m[2]}`) ?? extractCityFromText(title) ?? 'Unbekannt')
     const priceMatch = snippet.match(/(\d[\d.]*)\s*€/)
     const price = priceMatch ? parseInt(priceMatch[1].replace('.', '')) : undefined
 
@@ -161,8 +191,8 @@ function parseListings(html: string): ParsedListing[] {
       external_id: m[1],
       title,
       price_abloese: price && price > 0 && price < 100000 ? price : undefined,
-      city: cityFinal,
-      plz,
+      city,
+      plz: loc?.plz,
       contact_url: `https://www.kleinanzeigen.de${m[2]}`,
       posted_at: new Date().toISOString(),
     })
