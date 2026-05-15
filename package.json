@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "scrape:kleinanzeigen": "tsx scripts/scrapers/kleinanzeigen.ts",
+    "scrape:bkd": "tsx scripts/scrapers/bkd.ts",
+    "scrape:spider": "tsx scripts/scrapers/verein-spider.ts",
+    "scrape:all": "npm run scrape:bkd && npm run scrape:spider && npm run scrape:kleinanzeigen"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
@@ -24,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.0",
     "typescript": "^5"
   }
 }

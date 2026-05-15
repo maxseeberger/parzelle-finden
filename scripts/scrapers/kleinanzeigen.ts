@@ -1,24 +1,49 @@
 /**
- * Kleinanzeigen Scraper — Strategy: deeplinks only (ToS-safe)
+ * Kleinanzeigen Scraper — Deeplink strategy (ToS-safe)
  *
- * We do NOT copy listing content. Instead we:
- * 1. Fetch the Kleinanzeigen category page for Kleingarten
- * 2. Extract listing IDs, titles, prices, and sizes from structured data / meta
- * 3. Store a deeplink back to Kleinanzeigen — user clicks through to contact seller
- * 4. Run daily via cron
- *
- * This approach is ToS-compatible: we're an index, not a mirror.
+ * We store title, price, size, city, PLZ + a deeplink back to Kleinanzeigen.
+ * We do NOT copy full descriptions or contact details — users click through.
+ * Runs daily via GitHub Actions cron.
  */
 
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY! // use service role for server scripts
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
 const BASE_URL = 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207'
+const MAX_PAGES = 15
+const DELAY_MS = 2500
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-interface ScrapedListing {
+async function fetchPage(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 15000)
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'de-DE,de;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Referer': 'https://www.kleinanzeigen.de/',
+      },
+    })
+    if (!res.ok) {
+      console.log(`HTTP ${res.status} for ${url}`)
+      return null
+    }
+    return await res.text()
+  } catch (e) {
+    console.log(`Fetch failed for ${url}:`, e)
+    return null
+  }
+}
+
+interface ParsedListing {
   external_id: string
   title: string
   price_abloese?: number
@@ -29,144 +54,120 @@ interface ScrapedListing {
   posted_at: string
 }
 
-async function fetchListingsPage(pageUrl: string): Promise<ScrapedListing[]> {
-  const response = await fetch(pageUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; parzelle-finden.de aggregator; +https://parzelle-finden.de)',
-      'Accept-Language': 'de-DE,de;q=0.9',
-    },
-  })
+function parseListings(html: string): ParsedListing[] {
+  const listings: ParsedListing[] = []
 
-  if (!response.ok) {
-    console.error(`Failed to fetch ${pageUrl}: ${response.status}`)
-    return []
-  }
-
-  const html = await response.text()
-
-  // Parse listing cards from HTML
-  // Kleinanzeigen uses article[data-adid] elements
-  const listings: ScrapedListing[] = []
-  const adPattern = /data-adid="(\d+)"[\s\S]*?class="[^"]*ellipsis[^"]*"[^>]*>([^<]+)<[\s\S]*?(?:(\d+)\s*€)?[\s\S]*?(\d{5})\s+([A-ZÄÖÜa-zäöüß\s]+)/g
-
-  // Simpler approach: extract JSON-LD structured data if present
-  const jsonLdMatches = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)
-  if (jsonLdMatches) {
-    for (const match of jsonLdMatches) {
-      try {
-        const json = JSON.parse(match.replace(/<script[^>]*>|<\/script>/g, ''))
-        if (json['@type'] === 'ItemList' && json.itemListElement) {
-          for (const item of json.itemListElement) {
-            const el = item.item || item
-            if (el.name && el.url) {
-              const idMatch = el.url.match(/\/(\d+)\.html/)
-              if (idMatch) {
-                listings.push({
-                  external_id: idMatch[1],
-                  title: el.name,
-                  price_abloese: el.offers?.price ? parseInt(el.offers.price) : undefined,
-                  city: el.address?.addressLocality || 'Unbekannt',
-                  plz: el.address?.postalCode,
-                  contact_url: `https://www.kleinanzeigen.de${el.url.startsWith('/') ? '' : '/'}${el.url}`,
-                  posted_at: el.datePosted || new Date().toISOString(),
-                })
-              }
-            }
-          }
-        }
-      } catch {
-        // Skip malformed JSON-LD
+  // Try JSON-LD first (most reliable)
+  const jsonLdMatches = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+  for (const match of jsonLdMatches) {
+    try {
+      const json = JSON.parse(match[1])
+      const items = json['@type'] === 'ItemList' ? json.itemListElement : [json]
+      for (const item of items) {
+        const el = item.item ?? item
+        if (!el?.name || !el?.url) continue
+        const idMatch = String(el.url).match(/\/(\d+)\.html/)
+        if (!idMatch) continue
+        const price = el.offers?.price ? parseInt(String(el.offers.price).replace(/\D/g, '')) : undefined
+        listings.push({
+          external_id: idMatch[1],
+          title: String(el.name).trim(),
+          price_abloese: price && price > 0 ? price : undefined,
+          city: el.address?.addressLocality ?? 'Unbekannt',
+          plz: el.address?.postalCode,
+          contact_url: `https://www.kleinanzeigen.de/s-anzeige/${idMatch[1]}.html`,
+          posted_at: el.datePosted ?? new Date().toISOString(),
+        })
       }
-    }
+    } catch { /* skip */ }
   }
 
-  // Fallback: extract from article elements using regex (brittle but functional)
-  if (listings.length === 0) {
-    const articlePattern = /data-adid="(\d+)"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([^<]+)<[\s\S]*?(?:(\d[\d.]*)\s*€[\s\S]*?)?(\d{5})\s+([A-Za-zÄÖÜäöüß\s\-]+?)(?:<|\n)/g
-    let m: RegExpExecArray | null
-    while ((m = articlePattern.exec(html)) !== null) {
-      listings.push({
-        external_id: m[1],
-        title: m[3].trim(),
-        price_abloese: m[4] ? parseInt(m[4].replace('.', '')) : undefined,
-        city: m[6].trim(),
-        plz: m[5],
-        contact_url: `https://www.kleinanzeigen.de${m[2]}`,
-        posted_at: new Date().toISOString(),
-      })
-    }
+  if (listings.length > 0) return listings
+
+  // Fallback: parse article[data-adid] elements
+  const articleMatches = [...html.matchAll(/data-adid="(\d+)"[\s\S]*?<a[^>]+href="(\/s-anzeige\/[^"]+)"[\s\S]*?class="[^"]*text-module-begin[^"]*"[^>]*>([\s\S]*?)<\/a>/g)]
+  for (const m of articleMatches) {
+    const title = m[3].replace(/<[^>]+>/g, '').trim()
+    if (!title) continue
+
+    const plzMatch = html.slice(m.index ?? 0, (m.index ?? 0) + 800).match(/(\d{5})\s+([A-Za-zÄÖÜäöüß]+)/)
+    const priceMatch = html.slice(m.index ?? 0, (m.index ?? 0) + 800).match(/(\d[\d.]*)\s*€/)
+    const price = priceMatch ? parseInt(priceMatch[1].replace('.', '')) : undefined
+
+    listings.push({
+      external_id: m[1],
+      title,
+      price_abloese: price && price > 0 && price < 100000 ? price : undefined,
+      city: plzMatch?.[2] ?? 'Unbekannt',
+      plz: plzMatch?.[1],
+      contact_url: `https://www.kleinanzeigen.de${m[2]}`,
+      posted_at: new Date().toISOString(),
+    })
   }
 
   return listings
 }
 
-async function extractSizeFromTitle(title: string): Promise<number | undefined> {
-  const match = title.match(/(\d+)\s*m²/i)
-  return match ? parseInt(match[1]) : undefined
+function extractSizeFromTitle(title: string): number | undefined {
+  const m = title.match(/(\d{2,4})\s*m²/i)
+  return m ? parseInt(m[1]) : undefined
 }
 
-async function upsertListing(listing: ScrapedListing): Promise<void> {
-  const size_sqm = listing.size_sqm ?? (await extractSizeFromTitle(listing.title))
-
+async function upsertListing(l: ParsedListing): Promise<boolean> {
   const { error } = await supabase.from('listings').upsert({
     source: 'kleinanzeigen',
-    external_id: listing.external_id,
-    title: listing.title,
-    price_abloese: listing.price_abloese,
-    size_sqm,
-    city: listing.city,
-    plz: listing.plz,
-    contact_url: listing.contact_url,
-    posted_at: listing.posted_at,
+    external_id: l.external_id,
+    title: l.title.substring(0, 300),
+    price_abloese: l.price_abloese,
+    size_sqm: l.size_sqm ?? extractSizeFromTitle(l.title),
+    city: l.city,
+    plz: l.plz,
+    contact_url: l.contact_url,
+    posted_at: l.posted_at,
     scraped_at: new Date().toISOString(),
     active: true,
   }, { onConflict: 'source,external_id' })
 
-  if (error) console.error('Upsert error:', error.message)
+  if (error) { console.error('Upsert error:', error.message); return false }
+  return true
 }
 
-async function deactivateStaleListings(): Promise<void> {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+async function deactivateStale(): Promise<void> {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const { error } = await supabase
     .from('listings')
     .update({ active: false })
     .eq('source', 'kleinanzeigen')
-    .lt('scraped_at', thirtyDaysAgo)
-
-  if (error) console.error('Deactivation error:', error.message)
-  else console.log('Deactivated stale listings older than 30 days')
+    .lt('scraped_at', cutoff)
+  if (!error) console.log('Stale listings deactivated')
 }
 
-export async function runKleinanzeigenScraper(): Promise<void> {
-  console.log('Starting Kleinanzeigen scraper…')
-  let page = 1
-  let totalScraped = 0
+async function main() {
+  console.log('🔍 Kleinanzeigen Scraper gestartet —', new Date().toLocaleString('de-DE'))
 
-  while (page <= 10) { // max 10 pages = ~500 listings per run
+  let total = 0
+  for (let page = 1; page <= MAX_PAGES; page++) {
     const url = page === 1 ? BASE_URL : `${BASE_URL}/seite:${page}`
-    console.log(`Scraping page ${page}: ${url}`)
+    console.log(`Seite ${page}/${MAX_PAGES}: ${url}`)
 
-    const listings = await fetchListingsPage(url)
-    if (listings.length === 0) {
-      console.log(`No listings found on page ${page}, stopping.`)
-      break
-    }
+    const html = await fetchPage(url)
+    if (!html) { console.log('Keine Antwort, stoppe.'); break }
+
+    const listings = parseListings(html)
+    console.log(`  → ${listings.length} Inserate gefunden`)
+
+    if (listings.length === 0) { console.log('Keine Inserate, stoppe.'); break }
 
     for (const listing of listings) {
       await upsertListing(listing)
-      totalScraped++
+      total++
     }
 
-    // Polite rate limiting — 2 seconds between pages
-    await new Promise(r => setTimeout(r, 2000))
-    page++
+    await delay(DELAY_MS)
   }
 
-  await deactivateStaleListings()
-  console.log(`Scraper complete. Processed ${totalScraped} listings.`)
+  await deactivateStale()
+  console.log(`\n✅ Fertig. ${total} Inserate verarbeitet.`)
 }
 
-// Run directly: npx ts-node scripts/scrapers/kleinanzeigen.ts
-if (require.main === module) {
-  runKleinanzeigenScraper().catch(console.error)
-}
+main().catch(console.error)
