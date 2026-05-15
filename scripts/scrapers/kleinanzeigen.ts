@@ -84,14 +84,26 @@ function extractCityFromHtml(snippet: string): { city: string; plz?: string } {
   return { city: 'Unbekannt' }
 }
 
-function extractCityFromTitle(title: string): string | undefined {
-  const lower = title.toLowerCase()
+function extractCityFromText(text: string): string | undefined {
+  const lower = text.toLowerCase()
+  // Match against known city list (longest match wins to avoid "Hamburg" matching before "Hamburg-Mitte")
   for (const city of GERMAN_CITIES) {
-    if (lower.includes(city.toLowerCase())) return city
+    const re = new RegExp(`\\b${city.toLowerCase()}\\b`)
+    if (re.test(lower)) return city
   }
-  // Try "in Stadtname" or "bei Stadtname" pattern
-  const inCity = title.match(/\b(?:in|bei|nahe|nähe)\s+([A-ZÄÖÜ][a-zA-ZÄÖÜäöüß\-]{3,20})/i)
-  if (inCity) return inCity[1]
+  return undefined
+}
+
+function extractCityFromUrl(url: string): string | undefined {
+  // Kleinanzeigen slugs: /s-anzeige/kleingarten-in-berlin-mitte/1234...
+  // Split slug parts and test each against city list
+  const slug = url.split('/').find(p => p.includes('-') && !/^\d+$/.test(p)) ?? ''
+  const parts = slug.split('-')
+  for (let i = 0; i < parts.length; i++) {
+    const candidate = parts.slice(i, i + 2).join(' ')
+    const city = extractCityFromText(candidate) ?? extractCityFromText(parts[i])
+    if (city) return city
+  }
   return undefined
 }
 
@@ -112,9 +124,10 @@ function parseListings(html: string): ParsedListing[] {
         const price = el.offers?.price ? parseInt(String(el.offers.price).replace(/\D/g, '')) : undefined
         const title = String(el.name).trim()
 
-        // JSON-LD on list pages rarely has address — extract from title as fallback
+        // JSON-LD on list pages rarely has address — extract from URL slug or title
         const city = el.address?.addressLocality
-          ?? extractCityFromTitle(title)
+          ?? extractCityFromUrl(String(el.url))
+          ?? extractCityFromText(title)
           ?? 'Unbekannt'
 
         listings.push({
@@ -140,7 +153,7 @@ function parseListings(html: string): ParsedListing[] {
 
     const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
     const { city, plz } = extractCityFromHtml(snippet)
-    const cityFinal = city !== 'Unbekannt' ? city : (extractCityFromTitle(title) ?? 'Unbekannt')
+    const cityFinal = city !== 'Unbekannt' ? city : (extractCityFromUrl(`https://www.kleinanzeigen.de${m[2]}`) ?? extractCityFromText(title) ?? 'Unbekannt')
     const priceMatch = snippet.match(/(\d[\d.]*)\s*€/)
     const price = priceMatch ? parseInt(priceMatch[1].replace('.', '')) : undefined
 
