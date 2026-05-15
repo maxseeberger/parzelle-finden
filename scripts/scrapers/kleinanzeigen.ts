@@ -13,9 +13,46 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const BASE_URL = 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207'
-const MAX_PAGES = 15
+const MAX_PAGES_PER_CITY = 5
 const DELAY_MS = 2500
+
+// City slug → display name mapping for per-city search
+// Kleinanzeigen uses German city slugs in their search URLs
+const CITY_SEARCHES: Array<{ slug: string; name: string }> = [
+  { slug: 'berlin', name: 'Berlin' },
+  { slug: 'hamburg', name: 'Hamburg' },
+  { slug: 'muenchen', name: 'München' },
+  { slug: 'koeln', name: 'Köln' },
+  { slug: 'frankfurt-am-main', name: 'Frankfurt' },
+  { slug: 'stuttgart', name: 'Stuttgart' },
+  { slug: 'duesseldorf', name: 'Düsseldorf' },
+  { slug: 'leipzig', name: 'Leipzig' },
+  { slug: 'dortmund', name: 'Dortmund' },
+  { slug: 'essen', name: 'Essen' },
+  { slug: 'bremen', name: 'Bremen' },
+  { slug: 'dresden', name: 'Dresden' },
+  { slug: 'hannover', name: 'Hannover' },
+  { slug: 'nuernberg', name: 'Nürnberg' },
+  { slug: 'bochum', name: 'Bochum' },
+  { slug: 'wuppertal', name: 'Wuppertal' },
+  { slug: 'bielefeld', name: 'Bielefeld' },
+  { slug: 'bonn', name: 'Bonn' },
+  { slug: 'muenster', name: 'Münster' },
+  { slug: 'karlsruhe', name: 'Karlsruhe' },
+  { slug: 'mannheim', name: 'Mannheim' },
+  { slug: 'augsburg', name: 'Augsburg' },
+  { slug: 'wiesbaden', name: 'Wiesbaden' },
+  { slug: 'chemnitz', name: 'Chemnitz' },
+  { slug: 'halle-saale', name: 'Halle' },
+  { slug: 'magdeburg', name: 'Magdeburg' },
+  { slug: 'freiburg-im-breisgau', name: 'Freiburg' },
+  { slug: 'erfurt', name: 'Erfurt' },
+  { slug: 'rostock', name: 'Rostock' },
+  { slug: 'kassel', name: 'Kassel' },
+  { slug: 'mainz', name: 'Mainz' },
+  { slug: 'potsdam', name: 'Potsdam' },
+  { slug: 'luebeck', name: 'Lübeck' },
+]
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -131,7 +168,7 @@ function buildAdidLocationMap(html: string): Map<string, { city: string; plz?: s
   return map
 }
 
-function parseListings(html: string): ParsedListing[] {
+function parseListings(html: string, forcedCity?: string): ParsedListing[] {
   const listings: ParsedListing[] = []
 
   // Pre-build location map from HTML cards so we have city data for every ad
@@ -153,7 +190,8 @@ function parseListings(html: string): ParsedListing[] {
         const title = String(el.name).trim()
 
         const loc = locationMap.get(adid)
-        const city = el.address?.addressLocality
+        const city = forcedCity
+          ?? el.address?.addressLocality
           ?? (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
           ?? extractCityFromText(title)
           ?? 'Unbekannt'
@@ -180,7 +218,8 @@ function parseListings(html: string): ParsedListing[] {
     if (!title) continue
 
     const loc = locationMap.get(m[1])
-    const city = (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
+    const city = forcedCity
+      ?? (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
       ?? extractCityFromText(title)
       ?? 'Unbekannt'
     const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
@@ -235,27 +274,36 @@ async function deactivateStale(): Promise<void> {
   if (!error) console.log('Stale listings deactivated')
 }
 
+async function scrapeCity(citySlug: string, cityName: string): Promise<number> {
+  let count = 0
+  for (let page = 1; page <= MAX_PAGES_PER_CITY; page++) {
+    const base = `https://www.kleinanzeigen.de/s-kleingarten/${citySlug}/k0c207`
+    const url = page === 1 ? base : `${base}/seite:${page}`
+
+    const html = await fetchPage(url)
+    if (!html) break
+
+    const listings = parseListings(html, cityName)
+    if (listings.length === 0) break
+
+    for (const listing of listings) {
+      await upsertListing(listing)
+      count++
+    }
+    await delay(DELAY_MS)
+  }
+  return count
+}
+
 async function main() {
   console.log('🔍 Kleinanzeigen Scraper gestartet —', new Date().toLocaleString('de-DE'))
 
   let total = 0
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = page === 1 ? BASE_URL : `${BASE_URL}/seite:${page}`
-    console.log(`Seite ${page}/${MAX_PAGES}: ${url}`)
-
-    const html = await fetchPage(url)
-    if (!html) { console.log('Keine Antwort, stoppe.'); break }
-
-    const listings = parseListings(html)
-    console.log(`  → ${listings.length} Inserate gefunden`)
-
-    if (listings.length === 0) { console.log('Keine Inserate, stoppe.'); break }
-
-    for (const listing of listings) {
-      await upsertListing(listing)
-      total++
-    }
-
+  for (const { slug, name } of CITY_SEARCHES) {
+    console.log(`\n📍 ${name} (${slug})`)
+    const count = await scrapeCity(slug, name)
+    console.log(`  → ${count} Inserate`)
+    total += count
     await delay(DELAY_MS)
   }
 
