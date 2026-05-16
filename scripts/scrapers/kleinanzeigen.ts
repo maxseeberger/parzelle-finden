@@ -13,39 +13,89 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const MAX_PAGES_PER_CITY = 5
+const BASE_URL = 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207'
+const MAX_PAGES = 20
 const DELAY_MS = 2500
 
-// City location IDs for Kleinanzeigen (l=location radius 30km)
-// URL format: /s-grundstuecke-garten/kleingarten/[city-slug]/k0c207l[id]r30
-// Location IDs from Kleinanzeigen's own URL scheme
-const CITY_SEARCHES: Array<{ slug: string; locationId: string; name: string }> = [
-  { slug: 'berlin', locationId: '3331', name: 'Berlin' },
-  { slug: 'hamburg', locationId: '9409', name: 'Hamburg' },
-  { slug: 'muenchen', locationId: '9162', name: 'München' },
-  { slug: 'koeln', locationId: '9014', name: 'Köln' },
-  { slug: 'frankfurt-am-main', locationId: '6012', name: 'Frankfurt' },
-  { slug: 'stuttgart', locationId: '8111', name: 'Stuttgart' },
-  { slug: 'duesseldorf', locationId: '9011', name: 'Düsseldorf' },
-  { slug: 'leipzig', locationId: '14713', name: 'Leipzig' },
-  { slug: 'dortmund', locationId: '9015', name: 'Dortmund' },
-  { slug: 'essen', locationId: '9016', name: 'Essen' },
-  { slug: 'bremen', locationId: '4011', name: 'Bremen' },
-  { slug: 'dresden', locationId: '14612', name: 'Dresden' },
-  { slug: 'hannover', locationId: '3241', name: 'Hannover' },
-  { slug: 'nuernberg', locationId: '9362', name: 'Nürnberg' },
-  { slug: 'bochum', locationId: '9018', name: 'Bochum' },
-  { slug: 'bielefeld', locationId: '9011', name: 'Bielefeld' },
-  { slug: 'bonn', locationId: '9017', name: 'Bonn' },
-  { slug: 'muenster', locationId: '9021', name: 'Münster' },
-  { slug: 'karlsruhe', locationId: '8212', name: 'Karlsruhe' },
-  { slug: 'mannheim', locationId: '8222', name: 'Mannheim' },
-  { slug: 'augsburg', locationId: '9761', name: 'Augsburg' },
-  { slug: 'magdeburg', locationId: '15003', name: 'Magdeburg' },
-  { slug: 'erfurt', locationId: '16051', name: 'Erfurt' },
-  { slug: 'rostock', locationId: '13003', name: 'Rostock' },
-  { slug: 'potsdam', locationId: '12054', name: 'Potsdam' },
-]
+// PLZ prefix → city mapping (German postal codes, first 3 digits)
+const PLZ_TO_CITY: Record<string, string> = {
+  // Berlin
+  '100': 'Berlin', '101': 'Berlin', '102': 'Berlin', '103': 'Berlin', '104': 'Berlin',
+  '105': 'Berlin', '106': 'Berlin', '107': 'Berlin', '108': 'Berlin', '109': 'Berlin',
+  '110': 'Berlin', '111': 'Berlin', '112': 'Berlin', '113': 'Berlin', '114': 'Berlin',
+  '115': 'Berlin', '116': 'Berlin', '117': 'Berlin', '118': 'Berlin', '119': 'Berlin',
+  '120': 'Berlin', '121': 'Berlin', '122': 'Berlin', '123': 'Berlin', '124': 'Berlin',
+  '125': 'Berlin', '126': 'Berlin', '127': 'Berlin', '128': 'Berlin', '129': 'Berlin',
+  '130': 'Berlin', '131': 'Berlin', '132': 'Berlin', '133': 'Berlin', '134': 'Berlin',
+  '135': 'Berlin', '136': 'Berlin', '137': 'Berlin', '138': 'Berlin', '139': 'Berlin',
+  '140': 'Berlin', '141': 'Berlin', '142': 'Berlin', '143': 'Berlin', '144': 'Berlin',
+  // Hamburg
+  '200': 'Hamburg', '201': 'Hamburg', '202': 'Hamburg', '203': 'Hamburg', '204': 'Hamburg',
+  '205': 'Hamburg', '206': 'Hamburg', '207': 'Hamburg', '208': 'Hamburg', '209': 'Hamburg',
+  '210': 'Hamburg', '211': 'Hamburg', '212': 'Hamburg', '213': 'Hamburg', '214': 'Hamburg',
+  '215': 'Hamburg', '216': 'Hamburg', '217': 'Hamburg', '218': 'Hamburg', '219': 'Hamburg',
+  '220': 'Hamburg', '221': 'Hamburg', '222': 'Hamburg',
+  // Bremen
+  '280': 'Bremen', '281': 'Bremen', '282': 'Bremen', '283': 'Bremen', '284': 'Bremen', '285': 'Bremen',
+  // Hannover
+  '301': 'Hannover', '302': 'Hannover', '303': 'Hannover', '304': 'Hannover', '305': 'Hannover',
+  // Leipzig
+  '041': 'Leipzig', '042': 'Leipzig', '043': 'Leipzig', '044': 'Leipzig',
+  // Dresden
+  '010': 'Dresden', '011': 'Dresden', '012': 'Dresden', '013': 'Dresden',
+  // Chemnitz
+  '090': 'Chemnitz', '091': 'Chemnitz', '092': 'Chemnitz',
+  // Erfurt
+  '990': 'Erfurt', '991': 'Erfurt', '992': 'Erfurt',
+  // Rostock
+  '180': 'Rostock', '181': 'Rostock', '182': 'Rostock',
+  // Magdeburg
+  '390': 'Magdeburg', '391': 'Magdeburg', '392': 'Magdeburg',
+  // Halle
+  '060': 'Halle', '061': 'Halle',
+  // Potsdam
+  '144': 'Potsdam', '145': 'Potsdam', '146': 'Potsdam', '147': 'Potsdam',
+  // Düsseldorf
+  '401': 'Düsseldorf', '402': 'Düsseldorf', '403': 'Düsseldorf', '404': 'Düsseldorf', '405': 'Düsseldorf',
+  // Köln
+  '506': 'Köln', '507': 'Köln', '508': 'Köln', '509': 'Köln', '510': 'Köln', '511': 'Köln',
+  // Bonn
+  '531': 'Bonn', '532': 'Bonn', '533': 'Bonn',
+  // Dortmund
+  '440': 'Dortmund', '441': 'Dortmund', '442': 'Dortmund', '443': 'Dortmund', '444': 'Dortmund',
+  // Essen
+  '451': 'Essen', '452': 'Essen', '453': 'Essen',
+  // Bochum
+  '447': 'Bochum', '448': 'Bochum', '449': 'Bochum',
+  // Münster
+  '481': 'Münster', '482': 'Münster', '483': 'Münster',
+  // Frankfurt
+  '600': 'Frankfurt', '601': 'Frankfurt', '602': 'Frankfurt', '603': 'Frankfurt', '604': 'Frankfurt',
+  '605': 'Frankfurt', '606': 'Frankfurt', '607': 'Frankfurt', '608': 'Frankfurt',
+  // Stuttgart
+  '700': 'Stuttgart', '701': 'Stuttgart', '702': 'Stuttgart', '703': 'Stuttgart', '704': 'Stuttgart',
+  '705': 'Stuttgart', '706': 'Stuttgart', '707': 'Stuttgart',
+  // Karlsruhe
+  '760': 'Karlsruhe', '761': 'Karlsruhe', '762': 'Karlsruhe',
+  // Mannheim
+  '681': 'Mannheim', '682': 'Mannheim', '683': 'Mannheim',
+  // München
+  '800': 'München', '801': 'München', '802': 'München', '803': 'München', '804': 'München',
+  '805': 'München', '806': 'München', '807': 'München', '808': 'München', '809': 'München',
+  '810': 'München', '811': 'München', '812': 'München', '813': 'München', '814': 'München',
+  '815': 'München', '816': 'München', '817': 'München', '818': 'München',
+  // Augsburg
+  '860': 'Augsburg', '861': 'Augsburg', '862': 'Augsburg',
+  // Nürnberg
+  '900': 'Nürnberg', '901': 'Nürnberg', '902': 'Nürnberg', '903': 'Nürnberg', '904': 'Nürnberg',
+  '905': 'Nürnberg',
+}
+
+function cityFromPlz(plz: string): string | undefined {
+  const prefix3 = plz.substring(0, 3)
+  const prefix2 = plz.substring(0, 2)
+  return PLZ_TO_CITY[prefix3] ?? PLZ_TO_CITY[prefix2]
+}
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -183,9 +233,11 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
         const title = String(el.name).trim()
 
         const loc = locationMap.get(adid)
+        const plz = el.address?.postalCode ?? loc?.plz
         const city = forcedCity
           ?? el.address?.addressLocality
           ?? (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
+          ?? (plz ? cityFromPlz(plz) : undefined)
           ?? extractCityFromText(title)
           ?? 'Unbekannt'
 
@@ -194,7 +246,7 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
           title,
           price_abloese: price && price > 0 ? price : undefined,
           city,
-          plz: el.address?.postalCode ?? loc?.plz,
+          plz,
           contact_url: `https://www.kleinanzeigen.de/s-anzeige/${adid}.html`,
           posted_at: el.datePosted ?? new Date().toISOString(),
         })
@@ -213,6 +265,7 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
     const loc = locationMap.get(m[1])
     const city = forcedCity
       ?? (loc?.city !== 'Unbekannt' ? loc?.city : undefined)
+      ?? (loc?.plz ? cityFromPlz(loc.plz) : undefined)
       ?? extractCityFromText(title)
       ?? 'Unbekannt'
     const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
@@ -267,36 +320,27 @@ async function deactivateStale(): Promise<void> {
   if (!error) console.log('Stale listings deactivated')
 }
 
-async function scrapeCity(citySlug: string, locationId: string, cityName: string): Promise<number> {
-  let count = 0
-  for (let page = 1; page <= MAX_PAGES_PER_CITY; page++) {
-    const base = `https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/${citySlug}/k0c207l${locationId}r30`
-    const url = page === 1 ? base : `${base}/seite:${page}`
-
-    const html = await fetchPage(url)
-    if (!html) break
-
-    const listings = parseListings(html, cityName)
-    if (listings.length === 0) break
-
-    for (const listing of listings) {
-      await upsertListing(listing)
-      count++
-    }
-    await delay(DELAY_MS)
-  }
-  return count
-}
-
 async function main() {
   console.log('🔍 Kleinanzeigen Scraper gestartet —', new Date().toLocaleString('de-DE'))
 
   let total = 0
-  for (const { slug, locationId, name } of CITY_SEARCHES) {
-    console.log(`\n📍 ${name}`)
-    const count = await scrapeCity(slug, locationId, name)
-    console.log(`  → ${count} Inserate`)
-    total += count
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = page === 1 ? BASE_URL : `${BASE_URL}/seite:${page}`
+    console.log(`Seite ${page}/${MAX_PAGES}: ${url}`)
+
+    const html = await fetchPage(url)
+    if (!html) { console.log('Keine Antwort, stoppe.'); break }
+
+    const listings = parseListings(html)
+    console.log(`  → ${listings.length} Inserate gefunden`)
+
+    if (listings.length === 0) { console.log('Keine Inserate, stoppe.'); break }
+
+    for (const listing of listings) {
+      await upsertListing(listing)
+      total++
+    }
+
     await delay(DELAY_MS)
   }
 
