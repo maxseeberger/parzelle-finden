@@ -16,42 +16,35 @@ const supabase = createClient(
 const MAX_PAGES_PER_CITY = 5
 const DELAY_MS = 2500
 
-// City slug → display name mapping for per-city search
-// Kleinanzeigen uses German city slugs in their search URLs
-const CITY_SEARCHES: Array<{ slug: string; name: string }> = [
-  { slug: 'berlin', name: 'Berlin' },
-  { slug: 'hamburg', name: 'Hamburg' },
-  { slug: 'muenchen', name: 'München' },
-  { slug: 'koeln', name: 'Köln' },
-  { slug: 'frankfurt-am-main', name: 'Frankfurt' },
-  { slug: 'stuttgart', name: 'Stuttgart' },
-  { slug: 'duesseldorf', name: 'Düsseldorf' },
-  { slug: 'leipzig', name: 'Leipzig' },
-  { slug: 'dortmund', name: 'Dortmund' },
-  { slug: 'essen', name: 'Essen' },
-  { slug: 'bremen', name: 'Bremen' },
-  { slug: 'dresden', name: 'Dresden' },
-  { slug: 'hannover', name: 'Hannover' },
-  { slug: 'nuernberg', name: 'Nürnberg' },
-  { slug: 'bochum', name: 'Bochum' },
-  { slug: 'wuppertal', name: 'Wuppertal' },
-  { slug: 'bielefeld', name: 'Bielefeld' },
-  { slug: 'bonn', name: 'Bonn' },
-  { slug: 'muenster', name: 'Münster' },
-  { slug: 'karlsruhe', name: 'Karlsruhe' },
-  { slug: 'mannheim', name: 'Mannheim' },
-  { slug: 'augsburg', name: 'Augsburg' },
-  { slug: 'wiesbaden', name: 'Wiesbaden' },
-  { slug: 'chemnitz', name: 'Chemnitz' },
-  { slug: 'halle-saale', name: 'Halle' },
-  { slug: 'magdeburg', name: 'Magdeburg' },
-  { slug: 'freiburg-im-breisgau', name: 'Freiburg' },
-  { slug: 'erfurt', name: 'Erfurt' },
-  { slug: 'rostock', name: 'Rostock' },
-  { slug: 'kassel', name: 'Kassel' },
-  { slug: 'mainz', name: 'Mainz' },
-  { slug: 'potsdam', name: 'Potsdam' },
-  { slug: 'luebeck', name: 'Lübeck' },
+// City location IDs for Kleinanzeigen (l=location radius 30km)
+// URL format: /s-grundstuecke-garten/kleingarten/[city-slug]/k0c207l[id]r30
+// Location IDs from Kleinanzeigen's own URL scheme
+const CITY_SEARCHES: Array<{ slug: string; locationId: string; name: string }> = [
+  { slug: 'berlin', locationId: '3331', name: 'Berlin' },
+  { slug: 'hamburg', locationId: '9409', name: 'Hamburg' },
+  { slug: 'muenchen', locationId: '9162', name: 'München' },
+  { slug: 'koeln', locationId: '9014', name: 'Köln' },
+  { slug: 'frankfurt-am-main', locationId: '6012', name: 'Frankfurt' },
+  { slug: 'stuttgart', locationId: '8111', name: 'Stuttgart' },
+  { slug: 'duesseldorf', locationId: '9011', name: 'Düsseldorf' },
+  { slug: 'leipzig', locationId: '14713', name: 'Leipzig' },
+  { slug: 'dortmund', locationId: '9015', name: 'Dortmund' },
+  { slug: 'essen', locationId: '9016', name: 'Essen' },
+  { slug: 'bremen', locationId: '4011', name: 'Bremen' },
+  { slug: 'dresden', locationId: '14612', name: 'Dresden' },
+  { slug: 'hannover', locationId: '3241', name: 'Hannover' },
+  { slug: 'nuernberg', locationId: '9362', name: 'Nürnberg' },
+  { slug: 'bochum', locationId: '9018', name: 'Bochum' },
+  { slug: 'bielefeld', locationId: '9011', name: 'Bielefeld' },
+  { slug: 'bonn', locationId: '9017', name: 'Bonn' },
+  { slug: 'muenster', locationId: '9021', name: 'Münster' },
+  { slug: 'karlsruhe', locationId: '8212', name: 'Karlsruhe' },
+  { slug: 'mannheim', locationId: '8222', name: 'Mannheim' },
+  { slug: 'augsburg', locationId: '9761', name: 'Augsburg' },
+  { slug: 'magdeburg', locationId: '15003', name: 'Magdeburg' },
+  { slug: 'erfurt', locationId: '16051', name: 'Erfurt' },
+  { slug: 'rostock', locationId: '13003', name: 'Rostock' },
+  { slug: 'potsdam', locationId: '12054', name: 'Potsdam' },
 ]
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -274,10 +267,10 @@ async function deactivateStale(): Promise<void> {
   if (!error) console.log('Stale listings deactivated')
 }
 
-async function scrapeCity(citySlug: string, cityName: string): Promise<number> {
+async function scrapeCity(citySlug: string, locationId: string, cityName: string): Promise<number> {
   let count = 0
   for (let page = 1; page <= MAX_PAGES_PER_CITY; page++) {
-    const base = `https://www.kleinanzeigen.de/s-kleingarten/${citySlug}/k0c207`
+    const base = `https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/${citySlug}/k0c207l${locationId}r30`
     const url = page === 1 ? base : `${base}/seite:${page}`
 
     const html = await fetchPage(url)
@@ -299,9 +292,9 @@ async function main() {
   console.log('🔍 Kleinanzeigen Scraper gestartet —', new Date().toLocaleString('de-DE'))
 
   let total = 0
-  for (const { slug, name } of CITY_SEARCHES) {
-    console.log(`\n📍 ${name} (${slug})`)
-    const count = await scrapeCity(slug, name)
+  for (const { slug, locationId, name } of CITY_SEARCHES) {
+    console.log(`\n📍 ${name}`)
+    const count = await scrapeCity(slug, locationId, name)
     console.log(`  → ${count} Inserate`)
     total += count
     await delay(DELAY_MS)
