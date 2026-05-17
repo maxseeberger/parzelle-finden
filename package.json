@@ -8,9 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "scrape:kleinanzeigen": "tsx scripts/scrapers/kleinanzeigen.ts",
+    "scrape:quoka": "tsx scripts/scrapers/quoka.ts",
+    "scrape:markt": "tsx scripts/scrapers/markt.ts",
+    "scrape:listings": "npm run scrape:kleinanzeigen && npm run scrape:quoka && npm run scrape:markt",
     "scrape:bkd": "tsx scripts/scrapers/bkd.ts",
     "scrape:spider": "tsx scripts/scrapers/verein-spider.ts",
-    "scrape:all": "npm run scrape:bkd && npm run scrape:spider && npm run scrape:kleinanzeigen"
+    "scrape:all": "npm run scrape:bkd && npm run scrape:spider && npm run scrape:listings"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
