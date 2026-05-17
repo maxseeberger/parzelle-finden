@@ -286,6 +286,17 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
   return listings
 }
 
+const KLEINGARTEN_KEYWORDS = [
+  'kleingarten', 'parzelle', 'laube', 'kgv', 'gartenverein', 'schrebergarten',
+  'gartenparzelle', 'kleingartenverein', 'gartenanlage', 'ablöse', 'pacht',
+  'garten', 'grundstück', 'grünfläche', 'nutzgarten', 'vereinsgarten',
+]
+
+function isKleingartenListing(title: string): boolean {
+  const lower = title.toLowerCase()
+  return KLEINGARTEN_KEYWORDS.some(kw => lower.includes(kw))
+}
+
 function extractSizeFromTitle(title: string): number | undefined {
   const m = title.match(/(\d{2,4})\s*m²/i)
   return m ? parseInt(m[1]) : undefined
@@ -337,6 +348,7 @@ async function main() {
     if (listings.length === 0) { console.log('Keine Inserate, stoppe.'); break }
 
     for (const listing of listings) {
+      if (!isKleingartenListing(listing.title)) continue
       await upsertListing(listing)
       total++
     }
