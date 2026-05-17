@@ -1,13 +1,10 @@
 /**
- * BKD Scraper — Bundesverband der Kleingartenvereine Deutschlands
+ * Vereins-Scraper — OpenStreetMap Overpass API
  *
- * Strategy: crawl the BKD Landesverbände hierarchy + gartenverein.de search
- * to build the most comprehensive Vereins database possible.
- *
- * Sources:
- * 1. kleingarten-bund.de — official federation, all Landesverbände
- * 2. gartenverein.de/suchmaschine — independent directory with city search
- * 3. Individual Landesverband websites (Berlin, Hamburg, Bayern, NRW, etc.)
+ * Uses OSM's free Overpass API to get all German Kleingarten associations
+ * (landuse=allotments) with names, coordinates, and contact data.
+ * Much more reliable than scraping BKD/gartenverein.de websites.
+ * Runs weekly via GitHub Actions.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -17,254 +14,112 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const DELAY_MS = 1500
+const DELAY_MS = 3000
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-async function fetchHtml(url: string): Promise<string | null> {
+// Bundesland bounding boxes [south, west, north, east]
+const BUNDESLAENDER: Array<{ name: string; bbox: string }> = [
+  { name: 'Berlin', bbox: '52.338,13.088,52.677,13.761' },
+  { name: 'Hamburg', bbox: '53.395,9.731,53.748,10.326' },
+  { name: 'Bremen', bbox: '52.984,8.481,53.228,8.991' },
+  { name: 'Nordrhein-Westfalen', bbox: '50.322,5.866,52.532,9.462' },
+  { name: 'Bayern', bbox: '47.270,9.869,50.564,13.840' },
+  { name: 'Baden-Württemberg', bbox: '47.533,7.511,49.791,10.496' },
+  { name: 'Hessen', bbox: '49.395,7.773,51.659,10.237' },
+  { name: 'Niedersachsen', bbox: '51.296,6.654,53.894,11.598' },
+  { name: 'Sachsen', bbox: '50.171,11.872,51.685,15.042' },
+  { name: 'Sachsen-Anhalt', bbox: '51.044,10.561,53.042,13.186' },
+  { name: 'Thüringen', bbox: '50.204,9.876,51.648,12.654' },
+  { name: 'Brandenburg', bbox: '51.360,11.267,53.558,14.765' },
+  { name: 'Mecklenburg-Vorpommern', bbox: '53.109,10.593,54.684,14.412' },
+  { name: 'Rheinland-Pfalz', bbox: '48.967,6.113,50.942,8.508' },
+  { name: 'Saarland', bbox: '49.113,6.359,49.639,7.404' },
+  { name: 'Schleswig-Holstein', bbox: '53.359,8.007,55.058,11.312' },
+]
+
+interface OsmElement {
+  type: string
+  id: number
+  lat?: number
+  lon?: number
+  center?: { lat: number; lon: number }
+  tags?: Record<string, string>
+}
+
+async function queryOverpass(bbox: string): Promise<OsmElement[]> {
+  const query = `[out:json][timeout:60];(relation["landuse"="allotments"]["name"](${bbox});way["landuse"="allotments"]["name"](${bbox});node["leisure"="garden"]["garden:type"="allotment"]["name"](${bbox}););out center tags;`
   try {
     const controller = new AbortController()
-    setTimeout(() => controller.abort(), 12000)
-    const res = await fetch(url, {
+    setTimeout(() => controller.abort(), 70000)
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; parzelle-finden.de/1.0; +https://parzelle-finden.de)',
-        'Accept-Language': 'de-DE,de;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'parzelle-finden.de/1.0 (+https://parzelle-finden.de)',
       },
     })
-    if (!res.ok) return null
-    return await res.text()
-  } catch {
-    return null
+    if (!res.ok) { console.log(`Overpass HTTP ${res.status}`); return [] }
+    const json = await res.json()
+    return json.elements ?? []
+  } catch (e) {
+    console.log('Overpass error:', e)
+    return []
   }
 }
 
-function extractText(html: string, tag: string): string {
-  const m = html.match(new RegExp(`<${tag}[^>]*>([^<]+)<\/${tag}>`, 'i'))
-  return m ? m[1].trim() : ''
-}
+const GARDEN_KEYWORDS = ['garten', 'kgv', 'kleingarten', 'schrebergarten', 'parzelle', 'laube', 'gartenverein', 'gartenanlage']
 
-function extractLinks(html: string, base: string, pattern: RegExp): string[] {
-  const links: string[] = []
-  let m: RegExpExecArray | null
-  const linkPattern = /href="([^"]+)"/g
-  while ((m = linkPattern.exec(html)) !== null) {
-    const href = m[1]
-    if (pattern.test(href)) {
-      const full = href.startsWith('http') ? href : `${base}${href.startsWith('/') ? '' : '/'}${href}`
-      if (!links.includes(full)) links.push(full)
-    }
-  }
-  return links
-}
-
-// --- Bundesland mapping ---
-const BUNDESLAND_BY_KEYWORD: Record<string, string> = {
-  'berlin': 'Berlin', 'hamburg': 'Hamburg', 'bremen': 'Bremen',
-  'sachsen-anhalt': 'Sachsen-Anhalt', 'sachsen': 'Sachsen',
-  'thüringen': 'Thüringen', 'thueringen': 'Thüringen',
-  'brandenburg': 'Brandenburg', 'mecklenburg': 'Mecklenburg-Vorpommern',
-  'niedersachsen': 'Niedersachsen', 'nordrhein': 'Nordrhein-Westfalen',
-  'nrw': 'Nordrhein-Westfalen', 'hessen': 'Hessen', 'rheinland': 'Rheinland-Pfalz',
-  'saarland': 'Saarland', 'bayern': 'Bayern', 'bavaria': 'Bayern',
-  'württemberg': 'Baden-Württemberg', 'badenwuerttemberg': 'Baden-Württemberg',
-  'schleswig': 'Schleswig-Holstein',
-}
-
-function guessBundesland(text: string): string {
-  const lower = text.toLowerCase()
-  for (const [key, val] of Object.entries(BUNDESLAND_BY_KEYWORD)) {
-    if (lower.includes(key)) return val
-  }
-  return 'Deutschland'
-}
-
-// --- Source 1: BKD Landesverbände ---
-async function scrapeBkdLandesverbaende(): Promise<void> {
-  console.log('\n=== BKD Landesverbände ===')
-  const rootHtml = await fetchHtml('https://www.kleingarten-bund.de/der-verband/landesverbaende/')
-  if (!rootHtml) { console.log('BKD root unreachable'); return }
-
-  const lvLinks = extractLinks(rootHtml, 'https://www.kleingarten-bund.de', /landesverbaende\/[a-z]/)
-  console.log(`Found ${lvLinks.length} Landesverbände links`)
-
-  for (const lvUrl of lvLinks) {
-    const lvHtml = await fetchHtml(lvUrl)
-    if (!lvHtml) continue
-    const bundesland = guessBundesland(lvUrl + lvHtml.slice(0, 500))
-
-    // Extract Kreisverband and Verein links from each Landesverband page
-    const vereinLinks = extractLinks(lvHtml, 'https://www.kleingarten-bund.de', /verein|kgv|kleingart/)
-    for (const vUrl of vereinLinks.slice(0, 50)) {
-      await scrapeVereinPage(vUrl, bundesland)
-      await delay(DELAY_MS)
-    }
-    await delay(DELAY_MS)
-  }
-}
-
-// --- Source 2: gartenverein.de city search ---
-const MAJOR_CITIES = [
-  'Berlin', 'Hamburg', 'München', 'Köln', 'Frankfurt', 'Stuttgart', 'Düsseldorf',
-  'Leipzig', 'Dortmund', 'Essen', 'Bremen', 'Dresden', 'Hannover', 'Nürnberg',
-  'Duisburg', 'Bochum', 'Wuppertal', 'Bielefeld', 'Bonn', 'Münster', 'Karlsruhe',
-  'Mannheim', 'Augsburg', 'Wiesbaden', 'Mönchengladbach', 'Gelsenkirchen', 'Aachen',
-  'Braunschweig', 'Kiel', 'Chemnitz', 'Halle', 'Magdeburg', 'Freiburg', 'Erfurt',
-  'Rostock', 'Kassel', 'Mainz', 'Saarbrücken', 'Potsdam', 'Lübeck',
-]
-
-async function scrapeGartenvereinDe(): Promise<void> {
-  console.log('\n=== gartenverein.de city search ===')
-
-  for (const city of MAJOR_CITIES) {
-    const url = `https://www.gartenverein.de/suchmaschine/?city=${encodeURIComponent(city)}`
-    const html = await fetchHtml(url)
-    if (!html) { await delay(DELAY_MS); continue }
-
-    // Extract Verein entries from search results
-    const bundesland = await guessBundeslandByCity(city)
-    const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) ?? []
-
-    for (const row of rows) {
-      const nameMatch = row.match(/<td[^>]*>([^<]{5,80})<\/td>/)
-      const plzMatch = row.match(/(\d{5})/)
-      const cityMatch = row.match(/\d{5}\s+([A-Za-zÄÖÜäöüß\s\-]+)/)
-      const websiteMatch = row.match(/href="(https?:\/\/[^"]+)"/)
-
-      if (nameMatch && nameMatch[1].toLowerCase().includes('garten')) {
-        await upsertVerein({
-          name: nameMatch[1].trim(),
-          city: cityMatch?.[1]?.trim() ?? city,
-          plz: plzMatch?.[1],
-          bundesland,
-          website: websiteMatch?.[1],
-        })
-      }
-    }
-
-    console.log(`  ${city}: processed`)
-    await delay(DELAY_MS)
-  }
-}
-
-// --- Source 3: individual Landesverband websites ---
-const LANDESVERBÄNDE_DIRECT = [
-  { url: 'https://www.gartenfreunde-berlin.de/kleingaerten/vereinssuche/', bundesland: 'Berlin' },
-  { url: 'https://www.gartenfreunde-hh.de/vereine/', bundesland: 'Hamburg' },
-  { url: 'https://www.kleingaertner-nrw.de/verbände/', bundesland: 'Nordrhein-Westfalen' },
-  { url: 'https://www.kleingarten-bw.de/verbände/', bundesland: 'Baden-Württemberg' },
-  { url: 'https://www.kleingaertner-nuernberg.de/vereine/', bundesland: 'Bayern' },
-]
-
-async function scrapeLandesverbändeDirect(): Promise<void> {
-  console.log('\n=== Direkte Landesverbände ===')
-  for (const lv of LANDESVERBÄNDE_DIRECT) {
-    const html = await fetchHtml(lv.url)
-    if (!html) { await delay(DELAY_MS); continue }
-
-    // Extract club names, addresses from list pages
-    const namePattern = /<(?:h[23]|td|li)[^>]*>([^<]*(?:KGV|Gartenverein|Kleingartenverein|Gartenfreunde)[^<]*)<\/(?:h[23]|td|li)>/gi
-    let m: RegExpExecArray | null
-    while ((m = namePattern.exec(html)) !== null) {
-      const name = m[1].trim()
-      if (name.length > 5 && name.length < 100) {
-        await upsertVerein({ name, city: 'Unbekannt', bundesland: lv.bundesland })
-      }
-    }
-
-    console.log(`  ${lv.bundesland}: processed`)
-    await delay(DELAY_MS)
-  }
-}
-
-async function scrapeVereinPage(url: string, bundesland: string): Promise<void> {
-  const html = await fetchHtml(url)
-  if (!html) return
-
-  const name = extractText(html, 'h1') || extractText(html, 'h2')
-  if (!name || name.length < 5) return
-
-  const plzCityMatch = html.match(/(\d{5})\s+([A-Za-zÄÖÜäöüß\s\-]+)/)
-  const emailMatch = html.match(/href="mailto:([^"]+)"/)
-  const phoneMatch = html.match(/(?:Tel|Telefon)[.:]\s*([\d\s\+\-\/\(\)]{7,20})/)
-  const websiteMatch = html.match(/href="(https?:\/\/(?!kleingarten-bund)[^"]+)"/)
-
-  await upsertVerein({
-    name,
-    city: plzCityMatch?.[2]?.trim() ?? 'Unbekannt',
-    plz: plzCityMatch?.[1],
-    bundesland,
-    email: emailMatch?.[1],
-    phone: phoneMatch?.[1]?.trim(),
-    website: websiteMatch?.[1],
-  })
-}
-
-async function guessBundeslandByCity(city: string): Promise<string> {
-  const map: Record<string, string> = {
-    'Berlin': 'Berlin', 'Hamburg': 'Hamburg', 'Bremen': 'Bremen',
-    'München': 'Bayern', 'Nürnberg': 'Bayern', 'Augsburg': 'Bayern',
-    'Köln': 'Nordrhein-Westfalen', 'Düsseldorf': 'Nordrhein-Westfalen',
-    'Dortmund': 'Nordrhein-Westfalen', 'Essen': 'Nordrhein-Westfalen',
-    'Duisburg': 'Nordrhein-Westfalen', 'Bochum': 'Nordrhein-Westfalen',
-    'Bielefeld': 'Nordrhein-Westfalen', 'Münster': 'Nordrhein-Westfalen',
-    'Gelsenkirchen': 'Nordrhein-Westfalen', 'Aachen': 'Nordrhein-Westfalen',
-    'Mönchengladbach': 'Nordrhein-Westfalen', 'Wuppertal': 'Nordrhein-Westfalen',
-    'Frankfurt': 'Hessen', 'Wiesbaden': 'Hessen', 'Kassel': 'Hessen',
-    'Stuttgart': 'Baden-Württemberg', 'Karlsruhe': 'Baden-Württemberg',
-    'Mannheim': 'Baden-Württemberg', 'Freiburg': 'Baden-Württemberg',
-    'Leipzig': 'Sachsen', 'Dresden': 'Sachsen', 'Chemnitz': 'Sachsen',
-    'Hannover': 'Niedersachsen', 'Braunschweig': 'Niedersachsen',
-    'Magdeburg': 'Sachsen-Anhalt', 'Halle': 'Sachsen-Anhalt',
-    'Erfurt': 'Thüringen', 'Rostock': 'Mecklenburg-Vorpommern',
-    'Kiel': 'Schleswig-Holstein', 'Lübeck': 'Schleswig-Holstein',
-    'Potsdam': 'Brandenburg', 'Saarbrücken': 'Saarland', 'Mainz': 'Rheinland-Pfalz',
-    'Bonn': 'Nordrhein-Westfalen',
-  }
-  return map[city] ?? 'Deutschland'
-}
-
-interface VereinData {
-  name: string
-  city: string
-  plz?: string
-  bundesland: string
-  address?: string
-  website?: string
-  phone?: string
-  email?: string
+function isGartenVerein(name: string): boolean {
+  const lower = name.toLowerCase()
+  return GARDEN_KEYWORDS.some(k => lower.includes(k))
 }
 
 let upsertCount = 0
 
-async function upsertVerein(v: VereinData): Promise<void> {
-  if (!v.name || v.name.length < 4) return
+async function upsertVerein(el: OsmElement, bundesland: string): Promise<void> {
+  const tags = el.tags ?? {}
+  const name = tags.name ?? tags['name:de']
+  if (!name || name.length < 3 || !isGartenVerein(name)) return
+
+  const city = tags['addr:city'] ?? tags['addr:suburb'] ?? tags['addr:town'] ?? tags['addr:village'] ?? 'Unbekannt'
 
   const { error } = await supabase.from('vereine').upsert({
-    name: v.name.substring(0, 200),
-    city: v.city,
-    plz: v.plz,
-    bundesland: v.bundesland,
-    address: v.address,
-    website: v.website,
-    phone: v.phone,
-    email: v.email,
+    name: name.substring(0, 200),
+    city,
+    plz: tags['addr:postcode'],
+    bundesland,
+    website: tags.website ?? tags['contact:website'] ?? tags.url,
+    phone: tags.phone ?? tags['contact:phone'],
+    email: tags.email ?? tags['contact:email'],
     warteliste_status: 'unbekannt',
     last_updated: new Date().toISOString(),
   }, { onConflict: 'name,city', ignoreDuplicates: true })
 
   if (!error) {
     upsertCount++
-    if (upsertCount % 50 === 0) console.log(`  → ${upsertCount} Vereine eingefügt`)
+    if (upsertCount % 100 === 0) console.log(`  → ${upsertCount} Vereine gespeichert`)
   }
 }
 
 async function main() {
-  console.log('🌱 BKD Scraper gestartet —', new Date().toLocaleString('de-DE'))
+  console.log('🌱 OSM Vereins-Scraper gestartet —', new Date().toLocaleString('de-DE'))
 
-  await scrapeBkdLandesverbaende()
-  await scrapeGartenvereinDe()
-  await scrapeLandesverbändeDirect()
+  // Clear old garbage data
+  await supabase.from('vereine').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  console.log('Alte Vereinsdaten gelöscht, starte neu...\n')
+
+  for (const bl of BUNDESLAENDER) {
+    console.log(`📍 ${bl.name}`)
+    const elements = await queryOverpass(bl.bbox)
+    console.log(`  ${elements.length} OSM-Elemente`)
+
+    for (const el of elements) {
+      await upsertVerein(el, bl.name)
+    }
+    await delay(DELAY_MS)
+  }
 
   console.log(`\n✅ Fertig. ${upsertCount} Vereine in Supabase gespeichert.`)
 }
