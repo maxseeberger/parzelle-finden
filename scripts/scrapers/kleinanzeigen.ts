@@ -287,9 +287,10 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
 }
 
 const KLEINGARTEN_KEYWORDS = [
-  'kleingarten', 'parzelle', 'laube', 'kgv', 'gartenverein', 'schrebergarten',
-  'gartenparzelle', 'kleingartenverein', 'gartenanlage', 'ablöse', 'pacht',
-  'garten', 'grundstück', 'grünfläche', 'nutzgarten', 'vereinsgarten',
+  'kleingarten', 'schrebergarten', 'gartenparzelle', 'kleingartenverein',
+  'gartenverein', 'gartenanlage', 'nutzgarten', 'vereinsgarten',
+  'kgv ', ' kgv', 'laube', 'parzelle',
+  'zu verpachten', 'zu pachten', 'gartenpacht',
 ]
 
 function isKleingartenListing(title: string): boolean {
