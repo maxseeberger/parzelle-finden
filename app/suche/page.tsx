@@ -5,7 +5,7 @@ import VereinCard from '@/components/VereinCard'
 
 export const metadata: Metadata = {
   title: 'Vereine in deiner Nähe — parzelle-finden.de',
-  description: 'Kleingartenvereine in 80 km Radius um deine PLZ.',
+  description: 'Kleingartenvereine in deiner Nähe — sortiert nach Entfernung.',
 }
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -16,44 +16,52 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-// Primary: zippopotam.us — covers all 8,000+ German PLZ codes
-async function fetchLatLngZippopotam(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
+interface PlzCoords { lat: number; lng: number; city: string; state: string }
+
+async function fetchLatLng(plz: string): Promise<PlzCoords | null> {
+  // Primary: zippopotam.us — covers all 8,000+ German PLZ
   try {
     const res = await fetch(`https://api.zippopotam.us/de/${plz}`, { next: { revalidate: 86400 } })
-    if (!res.ok) return null
-    const data = await res.json()
-    if (!data?.places?.[0]) return null
-    const lat = parseFloat(data.places[0].latitude)
-    const lng = parseFloat(data.places[0].longitude)
-    const city = data.places[0]['place name'] ?? ''
-    if (isNaN(lat) || isNaN(lng)) return null
-    return { lat, lng, city }
-  } catch { return null }
-}
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.places?.[0]) {
+        const lat = parseFloat(data.places[0].latitude)
+        const lng = parseFloat(data.places[0].longitude)
+        if (!isNaN(lat) && !isNaN(lng)) {
+          return { lat, lng, city: data.places[0]['place name'] ?? '', state: data.places[0].state ?? '' }
+        }
+      }
+    }
+  } catch { /* fall through */ }
 
-// Fallback: Nominatim / OpenStreetMap
-async function fetchLatLngNominatim(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
+  // Fallback: Nominatim / OpenStreetMap
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?postalcode=${plz}&country=de&format=json&limit=1`,
       { headers: { 'User-Agent': 'parzelle-finden.de/1.0' }, next: { revalidate: 86400 } }
     )
-    if (!res.ok) return null
-    const data = await res.json()
-    if (!data?.[0]) return null
-    const lat = parseFloat(data[0].lat)
-    const lng = parseFloat(data[0].lon)
-    if (isNaN(lat) || isNaN(lng)) return null
-    return { lat, lng, city: data[0].display_name?.split(',')[0] ?? '' }
-  } catch { return null }
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.[0]) {
+        const lat = parseFloat(data[0].lat)
+        const lng = parseFloat(data[0].lon)
+        if (!isNaN(lat) && !isNaN(lng)) {
+          return { lat, lng, city: data[0].display_name?.split(',')[0] ?? '', state: '' }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  return null
 }
 
-async function fetchLatLng(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
-  return (await fetchLatLngZippopotam(plz)) ?? (await fetchLatLngNominatim(plz))
-}
+interface VereinWithDistance extends Verein { distanceKm: number }
 
-interface VereinWithDistance extends Verein {
-  distanceKm: number
+function withDistance(vereine: Verein[], lat: number, lng: number): VereinWithDistance[] {
+  return vereine
+    .filter(v => v.lat != null && v.lng != null)
+    .map(v => ({ ...v, distanceKm: haversineKm(lat, lng, v.lat!, v.lng!) }))
+    .sort((a, b) => a.distanceKm - b.distanceKm || (b.quality_score ?? 0) - (a.quality_score ?? 0))
 }
 
 export default async function SuchePage({
@@ -77,64 +85,94 @@ export default async function SuchePage({
     return (
       <div className="max-w-5xl mx-auto px-4 py-16 text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-3">PLZ nicht gefunden</h1>
-        <p className="text-gray-500">Die PLZ <strong>{plz}</strong> konnte leider nicht aufgelöst werden. Bitte eine andere PLZ versuchen.</p>
+        <p className="text-gray-500 mb-6">Die PLZ <strong>{plz}</strong> konnte nicht aufgelöst werden.</p>
+        <a href="/vereine" className="text-sm font-medium underline" style={{ color: 'var(--green-primary)' }}>
+          Alle Vereine durchsuchen →
+        </a>
       </div>
     )
   }
 
-  const { lat, lng, city: plzCity } = coords
-  const latMin = lat - 0.72
-  const latMax = lat + 0.72
-  const lngMin = lng - 1.05
-  const lngMax = lng + 1.05
+  const { lat, lng, city: plzCity, state } = coords
 
-  const { data, error } = await supabase
+  // 1. Try bounding box (~80 km)
+  const { data: bboxData } = await supabase
     .from('vereine')
     .select('*')
-    .gte('lat', latMin)
-    .lte('lat', latMax)
-    .gte('lng', lngMin)
-    .lte('lng', lngMax)
+    .gte('lat', lat - 0.72).lte('lat', lat + 0.72)
+    .gte('lng', lng - 1.05).lte('lng', lng + 1.05)
     .order('quality_score', { ascending: false })
     .limit(300)
 
-  if (error) {
-    console.error('Suche query error:', error.message)
+  let results = withDistance(bboxData ?? [], lat, lng).filter(v => v.distanceKm <= 80)
+
+  // 2. If too few results with lat/lng, also pull by bundesland (catches vereine without coords)
+  let fallbackLabel: string | null = null
+  if (results.length < 5 && state) {
+    const { data: blData } = await supabase
+      .from('vereine')
+      .select('*')
+      .ilike('bundesland', `%${state}%`)
+      .order('quality_score', { ascending: false })
+      .limit(100)
+
+    if (blData && blData.length > 0) {
+      // Merge — prefer ones with distance, append bundesland ones without coords at end
+      const withCoords = withDistance(blData, lat, lng)
+      const withoutCoords = blData
+        .filter(v => v.lat == null || v.lng == null)
+        .map(v => ({ ...v, distanceKm: Infinity }))
+
+      const merged = new Map<string, VereinWithDistance>()
+      for (const v of [...results, ...withCoords, ...withoutCoords as VereinWithDistance[]]) {
+        if (!merged.has(v.id)) merged.set(v.id, v)
+      }
+      results = Array.from(merged.values())
+        .sort((a, b) => {
+          if (a.distanceKm === Infinity && b.distanceKm === Infinity) return (b.quality_score ?? 0) - (a.quality_score ?? 0)
+          if (a.distanceKm === Infinity) return 1
+          if (b.distanceKm === Infinity) return -1
+          return a.distanceKm - b.distanceKm
+        })
+
+      if (withCoords.length > 0 && withCoords[0].distanceKm > 80) {
+        fallbackLabel = `Nächster Verein mit Koordinaten: ${withCoords[0].distanceKm.toFixed(0)} km entfernt`
+      }
+      if (results.length > 0 && !fallbackLabel) fallbackLabel = `Vereine in ${state}`
+    }
   }
 
-  const raw: Verein[] = data ?? []
-
-  // Filter to exact 80 km radius and sort by distance
-  const results: VereinWithDistance[] = raw
-    .filter(v => v.lat != null && v.lng != null)
-    .map(v => ({
-      ...v,
-      distanceKm: haversineKm(lat, lng, v.lat!, v.lng!),
-    }))
-    .filter(v => v.distanceKm <= 80)
-    .sort((a, b) => a.distanceKm - b.distanceKm || (b.quality_score ?? 0) - (a.quality_score ?? 0))
+  const nearestKm = results.find(v => v.distanceKm < Infinity)?.distanceKm
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
+      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {results.length} {results.length === 1 ? 'Verein' : 'Vereine'} in 80 km{plzCity ? ` um ${plzCity}` : ''} ({plz})
+        <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
+          <span>📍 {plz}{plzCity ? ` · ${plzCity}` : ''}{state ? `, ${state}` : ''}</span>
+        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">
+          {results.length} {results.length === 1 ? 'Verein' : 'Vereine'} in der Nähe
         </h1>
-        <p className="text-gray-500">Sortiert nach Entfernung · Radius 80 km</p>
+        {nearestKm != null && nearestKm < Infinity ? (
+          <p className="text-gray-500">
+            Nächster Verein: <strong>{nearestKm.toFixed(1).replace('.', ',')} km</strong>
+            {fallbackLabel ? ` · ${fallbackLabel}` : ' · Sortiert nach Entfernung'}
+          </p>
+        ) : fallbackLabel ? (
+          <p className="text-gray-500">{fallbackLabel}</p>
+        ) : null}
       </div>
 
-      {results.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-gray-400 text-lg">Keine Vereine in diesem Radius gefunden.</p>
-          <p className="text-gray-400 text-sm mt-2">Versuche eine andere PLZ oder schaue im <a href="/vereine" className="underline" style={{ color: 'var(--green-primary)' }}>gesamten Verzeichnis</a>.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {results.map(v => (
-            <VereinCard key={v.id} verein={v} distanceKm={v.distanceKm} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {results.map(v => (
+          <VereinCard
+            key={v.id}
+            verein={v}
+            distanceKm={v.distanceKm < Infinity ? v.distanceKm : undefined}
+          />
+        ))}
+      </div>
     </div>
   )
 }
