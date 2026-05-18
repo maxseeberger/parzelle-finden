@@ -26,8 +26,8 @@ export default function DatenschutzPage() {
           <p>
             Verantwortlicher für die Datenverarbeitung auf dieser Website ist:<br /><br />
             Max Seeberger<br />
-            [Straße und Hausnummer]<br />
-            [PLZ Ort]<br />
+            Fischackerweg 5A<br />
+            82335 Berg<br />
             E-Mail: <a href="mailto:hallo@parzelle-finden.de" className="text-green-700 hover:underline">hallo@parzelle-finden.de</a>
           </p>
         </section>

@@ -16,8 +16,8 @@ export default function ImpressumPage() {
           <h2 className="text-base font-semibold text-gray-900 mb-2">Angaben gemäß § 5 TMG</h2>
           <p>
             Max Seeberger<br />
-            [Straße und Hausnummer]<br />
-            [PLZ Ort]<br />
+            Fischackerweg 5A<br />
+            82335 Berg<br />
             Deutschland
           </p>
         </section>
@@ -33,8 +33,8 @@ export default function ImpressumPage() {
           <h2 className="text-base font-semibold text-gray-900 mb-2">Verantwortlich für den Inhalt (§ 55 Abs. 2 RStV)</h2>
           <p>
             Max Seeberger<br />
-            [Straße und Hausnummer]<br />
-            [PLZ Ort]
+            Fischackerweg 5A<br />
+            82335 Berg
           </p>
         </section>
 
