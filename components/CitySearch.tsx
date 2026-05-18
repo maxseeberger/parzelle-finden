@@ -12,6 +12,8 @@ export default function CitySearch() {
 
   function handleInput(value: string) {
     setQuery(value)
+    // PLZ input: suppress city suggestions
+    if (/^\d+$/.test(value)) { setSuggestions([]); return }
     if (value.length < 2) { setSuggestions([]); return }
     const filtered = CITIES.filter(c =>
       c.name.toLowerCase().includes(value.toLowerCase())
@@ -26,6 +28,11 @@ export default function CitySearch() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // PLZ: exactly 5 digits → radius search
+    if (/^\d{5}$/.test(query.trim())) {
+      router.push(`/suche?plz=${query.trim()}`)
+      return
+    }
     if (suggestions.length > 0) handleSelect(suggestions[0].slug)
   }
 
@@ -37,7 +44,7 @@ export default function CitySearch() {
           type="text"
           value={query}
           onChange={e => handleInput(e.target.value)}
-          placeholder="Stadt eingeben, z.B. Berlin, München..."
+          placeholder="Stadt oder PLZ eingeben, z.B. Berlin oder 20095..."
           className="w-full pl-12 pr-4 py-4 text-base rounded-xl border border-gray-200 shadow-sm bg-white focus:outline-none focus:ring-2 focus:border-transparent"
           style={{ '--tw-ring-color': 'var(--green-primary)' } as React.CSSProperties}
           autoComplete="off"

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: 'Alle Kleingartenvereine in Deutschland mit Wartelisten-Status, Kontaktdaten und Vereinsinformationen.',
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 25
 
 export default async function VereineDirectoryPage({
   searchParams,

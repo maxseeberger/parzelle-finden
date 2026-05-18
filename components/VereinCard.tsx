@@ -1,17 +1,33 @@
-import Link from 'next/link'
-import { ExternalLink, Phone, Mail, MapPin, Users, Euro, List } from 'lucide-react'
+'use client'
+
+import { useState } from 'react'
+import { ExternalLink, Phone, Mail, MapPin, Users, Euro, List, ChevronDown, ChevronUp } from 'lucide-react'
 import type { Verein } from '@/lib/supabase'
 import WartelisteBadge from './WartelisteBadge'
 
-export default function VereinCard({ verein }: { verein: Verein }) {
+interface VereinCardProps {
+  verein: Verein
+  distanceKm?: number
+}
+
+export default function VereinCard({ verein, distanceKm }: VereinCardProps) {
+  const [expanded, setExpanded] = useState(false)
+
   const location = verein.city && verein.city !== 'Unbekannt'
     ? `${verein.plz ? verein.plz + ' ' : ''}${verein.city}`
     : verein.bundesland ?? ''
 
-  const hasDetails = verein.parzellen_anzahl || verein.warteliste_laenge || verein.jahresbeitrag
+  const hasDetails = verein.parzellen_anzahl || verein.warteliste_laenge != null || verein.jahresbeitrag
+
+  function formatDistance(km: number): string {
+    return km.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km'
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-green-200 hover:shadow-md transition-all">
+    <div
+      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-green-200 hover:shadow-md transition-all cursor-pointer select-none"
+      onClick={() => setExpanded(e => !e)}
+    >
       {/* Header */}
       <div className="p-5 pb-3">
         <div className="flex items-start justify-between gap-3">
@@ -20,16 +36,26 @@ export default function VereinCard({ verein }: { verein: Verein }) {
             {location && (
               <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                 <MapPin size={11} />
-                {verein.address && verein.address !== 'Unbekannt' ? verein.address + ', ' : ''}
                 {location}
+                {distanceKm != null && (
+                  <span className="ml-1.5 text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full font-medium">
+                    {formatDistance(distanceKm)}
+                  </span>
+                )}
               </p>
             )}
           </div>
-          <WartelisteBadge status={verein.warteliste_status} />
+          <div className="flex items-center gap-2 shrink-0">
+            <WartelisteBadge status={verein.warteliste_status} />
+            {expanded
+              ? <ChevronUp size={16} className="text-gray-400" />
+              : <ChevronDown size={16} className="text-gray-400" />
+            }
+          </div>
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats pills */}
       {hasDetails && (
         <div className="px-5 pb-3 flex flex-wrap gap-4">
           {verein.parzellen_anzahl && (
@@ -68,47 +94,71 @@ export default function VereinCard({ verein }: { verein: Verein }) {
         </div>
       )}
 
-      {/* Contact + action */}
-      <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          {verein.website && (
-            <a
-              href={verein.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs font-medium hover:underline"
-              style={{ color: 'var(--green-primary)' }}
-            >
-              <ExternalLink size={11} /> Website
-            </a>
-          )}
-          {verein.phone && (
-            <a
-              href={`tel:${verein.phone}`}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-            >
-              <Phone size={11} /> {verein.phone}
-            </a>
+      {/* Collapsed contact strip */}
+      <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-3 flex-wrap" onClick={e => e.stopPropagation()}>
+        {verein.website && (
+          <a
+            href={verein.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs font-medium hover:underline"
+            style={{ color: 'var(--green-primary)' }}
+          >
+            <ExternalLink size={11} /> Website
+          </a>
+        )}
+        {verein.phone && (
+          <a
+            href={`tel:${verein.phone}`}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            <Phone size={11} /> {verein.phone}
+          </a>
+        )}
+        {!verein.website && !verein.phone && !verein.email && !expanded && (
+          <span className="text-xs text-gray-300">Keine Kontaktdaten</span>
+        )}
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="px-5 pb-5 border-t border-gray-50 pt-4 space-y-2" onClick={e => e.stopPropagation()}>
+          {verein.address && verein.address !== 'Unbekannt' && (
+            <div className="flex items-start gap-2 text-xs text-gray-600">
+              <MapPin size={12} className="mt-0.5 shrink-0 text-gray-400" />
+              <span>{verein.address}{location ? ', ' + location : ''}</span>
+            </div>
           )}
           {verein.email && (
-            <a
-              href={`mailto:${verein.email}`}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-            >
-              <Mail size={11} /> {verein.email}
-            </a>
+            <div className="flex items-center gap-2">
+              <Mail size={12} className="text-gray-400 shrink-0" />
+              <a
+                href={`mailto:${verein.email}`}
+                className="text-xs text-gray-600 hover:text-gray-900 hover:underline break-all"
+              >
+                {verein.email}
+              </a>
+            </div>
           )}
-          {!verein.website && !verein.phone && !verein.email && (
-            <span className="text-xs text-gray-300">Keine Kontaktdaten</span>
+          {verein.phone && (
+            <div className="flex items-center gap-2">
+              <Phone size={12} className="text-gray-400 shrink-0" />
+              <a
+                href={`tel:${verein.phone}`}
+                className="text-xs text-gray-600 hover:text-gray-900"
+              >
+                {verein.phone}
+              </a>
+            </div>
+          )}
+          {verein.bundesland && (
+            <p className="text-xs text-gray-400">{verein.bundesland}</p>
+          )}
+          {!verein.address && !verein.email && !verein.phone && (
+            <p className="text-xs text-gray-300">Keine weiteren Informationen verfügbar.</p>
           )}
         </div>
-        <Link
-          href={`/vereine/${verein.id}`}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-100 text-gray-500 hover:border-green-300 hover:text-green-700 transition-colors whitespace-nowrap"
-        >
-          Mehr Details →
-        </Link>
-      </div>
+      )}
     </div>
   )
 }

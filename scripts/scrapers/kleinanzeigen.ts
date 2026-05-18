@@ -14,13 +14,20 @@ const supabase = createClient(
 )
 
 // Multiple search URLs to maximise coverage across synonym terms
-const SEARCH_URLS: Array<{ url: string; pages: number }> = [
+const SEARCH_URLS: Array<{ url: string; pages: number; city?: string }> = [
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207', pages: 20 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/schrebergarten/k0', pages: 10 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/datsche/k0', pages: 5 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/freizeitgrundstück/k0', pages: 10 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/wochenendgrundstück/k0', pages: 5 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/gartenparzelle/k0', pages: 5 },
+  // City-specific URLs for major metros
+  { url: 'https://www.kleinanzeigen.de/s-hamburg/kleingarten/k0c207l9409', pages: 5, city: 'Hamburg' },
+  { url: 'https://www.kleinanzeigen.de/s-muenchen/kleingarten/k0c207l6314', pages: 5, city: 'München' },
+  { url: 'https://www.kleinanzeigen.de/s-frankfurt-am-main/kleingarten/k0c207l39', pages: 5, city: 'Frankfurt' },
+  { url: 'https://www.kleinanzeigen.de/s-koeln/kleingarten/k0c207l96', pages: 5, city: 'Köln' },
+  { url: 'https://www.kleinanzeigen.de/s-stuttgart/kleingarten/k0c207l102', pages: 5, city: 'Stuttgart' },
+  { url: 'https://www.kleinanzeigen.de/s-duesseldorf/kleingarten/k0c207l63', pages: 5, city: 'Düsseldorf' },
 ]
 const DELAY_MS = 2500
 
@@ -219,8 +226,7 @@ const PLZ_TO_CITY: Record<string, string> = {
   // ─── Koblenz ───
   '560': 'Koblenz', '561': 'Koblenz',
   // ─── Münster (481–483) already above
-  // ─── Lüneburg ───
-  '213': 'Lüneburg',
+  // Note: Lüneburg (213xx) shares prefix with Hamburg; resolved via text parsing
 
   // ─── 2-digit fallback prefixes (less precise, for smaller towns) ───
   '01': 'Dresden',    // Sachsen Ost
@@ -540,7 +546,8 @@ async function main() {
   const seenIds = new Set<string>() // dedup across search URLs
   let total = 0
 
-  for (const { url: baseUrl, pages: maxPages } of SEARCH_URLS) {
+  for (const entry of SEARCH_URLS) {
+    const { url: baseUrl, pages: maxPages, city: entryCity } = entry
     console.log(`\n📋 Suche: ${baseUrl}`)
     for (let page = 1; page <= maxPages; page++) {
       const url = page === 1 ? baseUrl : `${baseUrl}/seite:${page}`
@@ -549,7 +556,7 @@ async function main() {
       const html = await fetchPage(url)
       if (!html) { console.log('  Keine Antwort, stoppe.'); break }
 
-      const listings = parseListings(html)
+      const listings = parseListings(html, entryCity)
       console.log(`  → ${listings.length} Inserate gefunden`)
 
       if (listings.length === 0) { console.log('  Leer, stoppe.'); break }
