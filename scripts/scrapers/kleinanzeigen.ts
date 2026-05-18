@@ -35,7 +35,7 @@ const PLZ_TO_CITY: Record<string, string> = {
   '125': 'Berlin', '126': 'Berlin', '127': 'Berlin', '128': 'Berlin', '129': 'Berlin',
   '130': 'Berlin', '131': 'Berlin', '132': 'Berlin', '133': 'Berlin', '134': 'Berlin',
   '135': 'Berlin', '136': 'Berlin', '137': 'Berlin', '138': 'Berlin', '139': 'Berlin',
-  '140': 'Berlin', '141': 'Berlin', '142': 'Berlin', '143': 'Berlin', '144': 'Berlin',
+  '140': 'Berlin', '141': 'Berlin', '142': 'Berlin', '143': 'Berlin',
   // Hamburg
   '200': 'Hamburg', '201': 'Hamburg', '202': 'Hamburg', '203': 'Hamburg', '204': 'Hamburg',
   '205': 'Hamburg', '206': 'Hamburg', '207': 'Hamburg', '208': 'Hamburg', '209': 'Hamburg',
