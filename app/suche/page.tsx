@@ -16,27 +16,40 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-interface PlzResult {
-  latitude: string
-  longitude: string
+// Primary: zippopotam.us — covers all 8,000+ German PLZ codes
+async function fetchLatLngZippopotam(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/de/${plz}`, { next: { revalidate: 86400 } })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data?.places?.[0]) return null
+    const lat = parseFloat(data.places[0].latitude)
+    const lng = parseFloat(data.places[0].longitude)
+    const city = data.places[0]['place name'] ?? ''
+    if (isNaN(lat) || isNaN(lng)) return null
+    return { lat, lng, city }
+  } catch { return null }
 }
 
-async function fetchLatLng(plz: string): Promise<{ lat: number; lng: number } | null> {
+// Fallback: Nominatim / OpenStreetMap
+async function fetchLatLngNominatim(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
   try {
     const res = await fetch(
-      `https://openplzapi.org/de/Localities?postalCode=${plz}`,
-      { next: { revalidate: 86400 } }
+      `https://nominatim.openstreetmap.org/search?postalcode=${plz}&country=de&format=json&limit=1`,
+      { headers: { 'User-Agent': 'parzelle-finden.de/1.0' }, next: { revalidate: 86400 } }
     )
     if (!res.ok) return null
-    const data: PlzResult[] = await res.json()
-    if (!data || data.length === 0) return null
-    const lat = parseFloat(data[0].latitude)
-    const lng = parseFloat(data[0].longitude)
+    const data = await res.json()
+    if (!data?.[0]) return null
+    const lat = parseFloat(data[0].lat)
+    const lng = parseFloat(data[0].lon)
     if (isNaN(lat) || isNaN(lng)) return null
-    return { lat, lng }
-  } catch {
-    return null
-  }
+    return { lat, lng, city: data[0].display_name?.split(',')[0] ?? '' }
+  } catch { return null }
+}
+
+async function fetchLatLng(plz: string): Promise<{ lat: number; lng: number; city: string } | null> {
+  return (await fetchLatLngZippopotam(plz)) ?? (await fetchLatLngNominatim(plz))
 }
 
 interface VereinWithDistance extends Verein {
@@ -69,7 +82,7 @@ export default async function SuchePage({
     )
   }
 
-  const { lat, lng } = coords
+  const { lat, lng, city: plzCity } = coords
   const latMin = lat - 0.72
   const latMax = lat + 0.72
   const lngMin = lng - 1.05
@@ -105,7 +118,7 @@ export default async function SuchePage({
     <div className="max-w-5xl mx-auto px-4 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {results.length} {results.length === 1 ? 'Verein' : 'Vereine'} in 80 km um PLZ {plz}
+          {results.length} {results.length === 1 ? 'Verein' : 'Vereine'} in 80 km{plzCity ? ` um ${plzCity}` : ''} ({plz})
         </h1>
         <p className="text-gray-500">Sortiert nach Entfernung · Radius 80 km</p>
       </div>
