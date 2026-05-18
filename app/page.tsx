@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { MapPin, Clock, Euro, Bell, ChevronRight, CheckCircle } from 'lucide-react'
 import CitySearch from '@/components/CitySearch'
+import AlertForm from '@/components/AlertForm'
 import { CITIES } from '@/lib/cities'
 
 const FEATURED_CITIES = CITIES.slice(0, 8)
@@ -180,24 +181,7 @@ export default function HomePage() {
           <p className="text-green-200 mb-8 max-w-md mx-auto">
             Trag dich ein und wir benachrichtigen dich per E-Mail, sobald in deiner Stadt ein Garten verfügbar ist.
           </p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="deine@email.de"
-              className="flex-1 px-4 py-3 rounded-xl text-gray-900 bg-white focus:outline-none"
-            />
-            <input
-              type="text"
-              placeholder="Stadt"
-              className="sm:w-32 px-4 py-3 rounded-xl text-gray-900 bg-white focus:outline-none"
-            />
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-xl font-medium text-green-900 bg-green-300 hover:bg-green-200 transition-colors whitespace-nowrap"
-            >
-              Alert setzen
-            </button>
-          </form>
+          <AlertForm variant="hero" />
         </div>
       </section>
     </>

@@ -7,6 +7,7 @@ import type { Listing, Verein } from '@/lib/supabase'
 import ListingCard from '@/components/ListingCard'
 import VereinCard from '@/components/VereinCard'
 import WartelisteBadge from '@/components/WartelisteBadge'
+import AlertForm from '@/components/AlertForm'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -200,19 +201,7 @@ export default async function CityPage({ params }: Props) {
             <p className="text-green-200 text-xs mb-4">
               Sofort benachrichtigt werden wenn in {city.name} eine Parzelle frei wird.
             </p>
-            <form className="space-y-2">
-              <input
-                type="email"
-                placeholder="deine@email.de"
-                className="w-full px-3 py-2.5 rounded-xl text-gray-900 bg-white text-sm focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl font-medium text-green-900 bg-green-300 hover:bg-green-200 transition-colors text-sm"
-              >
-                Alert setzen
-              </button>
-            </form>
+            <AlertForm city={city.name} variant="sidebar" />
           </div>
 
           {/* Ablöse info */}
