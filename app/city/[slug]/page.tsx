@@ -31,7 +31,7 @@ export default async function CityPage({ params }: Props) {
 
   const [{ data: listingsData }, { data: vereineData }] = await Promise.all([
     supabase.from('listings').select('*').ilike('city', `%${city.name}%`).eq('active', true).order('posted_at', { ascending: false }).limit(20),
-    supabase.from('vereine').select('*').ilike('city', `%${city.name}%`).order('warteliste_status', { ascending: true }),
+    supabase.from('vereine').select('*').eq('bundesland', city.bundesland).order('warteliste_status', { ascending: true }).limit(50),
   ])
 
   const cityListings: Listing[] = listingsData ?? []
