@@ -30,7 +30,7 @@ const HOW_IT_WORKS = [
 ]
 
 const STATS = [
-  { value: '13.155', label: 'Kleingartenvereine' },
+  { value: '6.200+', label: 'Kleingartenvereine erfasst' },
   { value: '900.000+', label: 'Kleingärten deutschlandweit' },
   { value: '5 Mio.', label: 'Menschen suchen einen Garten' },
   { value: '€2.800', label: 'Durchschnittliche Ablöse' },

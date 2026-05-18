@@ -25,8 +25,10 @@ const SEARCH_URLS: Array<{ url: string; pages: number }> = [
 const DELAY_MS = 2500
 
 // PLZ prefix → city mapping (German postal codes, first 3 digits)
+// 3-digit PLZ prefix → city. Covers all 80+ major German cities.
+// cityFromPlz() tries 3-digit first, then 2-digit fallback for smaller towns.
 const PLZ_TO_CITY: Record<string, string> = {
-  // Berlin
+  // ─── Berlin (10xxx–14xxx) ───
   '100': 'Berlin', '101': 'Berlin', '102': 'Berlin', '103': 'Berlin', '104': 'Berlin',
   '105': 'Berlin', '106': 'Berlin', '107': 'Berlin', '108': 'Berlin', '109': 'Berlin',
   '110': 'Berlin', '111': 'Berlin', '112': 'Berlin', '113': 'Berlin', '114': 'Berlin',
@@ -36,66 +38,230 @@ const PLZ_TO_CITY: Record<string, string> = {
   '130': 'Berlin', '131': 'Berlin', '132': 'Berlin', '133': 'Berlin', '134': 'Berlin',
   '135': 'Berlin', '136': 'Berlin', '137': 'Berlin', '138': 'Berlin', '139': 'Berlin',
   '140': 'Berlin', '141': 'Berlin', '142': 'Berlin', '143': 'Berlin',
-  // Hamburg
+  // ─── Potsdam (144–147) ───
+  '144': 'Potsdam', '145': 'Potsdam', '146': 'Potsdam', '147': 'Potsdam',
+  // ─── Brandenburg an der Havel ───
+  '148': 'Brandenburg an der Havel', '149': 'Brandenburg an der Havel',
+  // ─── Frankfurt (Oder) ───
+  '150': 'Frankfurt (Oder)', '151': 'Frankfurt (Oder)', '152': 'Frankfurt (Oder)',
+  // ─── Cottbus ───
+  '030': 'Cottbus', '031': 'Cottbus', '032': 'Cottbus',
+  // ─── Rostock (180–182) ───
+  '180': 'Rostock', '181': 'Rostock', '182': 'Rostock',
+  // ─── Stralsund ───
+  '183': 'Stralsund', '184': 'Stralsund',
+  // ─── Schwerin ───
+  '190': 'Schwerin', '191': 'Schwerin', '192': 'Schwerin',
+  // ─── Hamburg (200–229) ───
   '200': 'Hamburg', '201': 'Hamburg', '202': 'Hamburg', '203': 'Hamburg', '204': 'Hamburg',
   '205': 'Hamburg', '206': 'Hamburg', '207': 'Hamburg', '208': 'Hamburg', '209': 'Hamburg',
   '210': 'Hamburg', '211': 'Hamburg', '212': 'Hamburg', '213': 'Hamburg', '214': 'Hamburg',
   '215': 'Hamburg', '216': 'Hamburg', '217': 'Hamburg', '218': 'Hamburg', '219': 'Hamburg',
-  '220': 'Hamburg', '221': 'Hamburg', '222': 'Hamburg',
-  // Bremen
+  '220': 'Hamburg', '221': 'Hamburg', '222': 'Hamburg', '223': 'Hamburg', '224': 'Hamburg',
+  '225': 'Hamburg', '226': 'Hamburg', '227': 'Hamburg', '228': 'Hamburg', '229': 'Hamburg',
+  // ─── Kiel (240–243) ───
+  '240': 'Kiel', '241': 'Kiel', '242': 'Kiel', '243': 'Kiel',
+  // ─── Lübeck (235–239) ───
+  '235': 'Lübeck', '236': 'Lübeck', '237': 'Lübeck', '238': 'Lübeck', '239': 'Lübeck',
+  // ─── Flensburg ───
+  '249': 'Flensburg',
+  // ─── Schwerin (erneut, 195–199 auch) ───
+  '195': 'Schwerin', '196': 'Schwerin', '197': 'Schwerin', '198': 'Schwerin', '199': 'Schwerin',
+  // ─── Bremen (280–285) ───
   '280': 'Bremen', '281': 'Bremen', '282': 'Bremen', '283': 'Bremen', '284': 'Bremen', '285': 'Bremen',
-  // Hannover
-  '301': 'Hannover', '302': 'Hannover', '303': 'Hannover', '304': 'Hannover', '305': 'Hannover',
-  // Leipzig
+  // ─── Bremerhaven ───
+  '275': 'Bremerhaven', '276': 'Bremerhaven', '277': 'Bremerhaven',
+  // ─── Hannover (300–306) ───
+  '300': 'Hannover', '301': 'Hannover', '302': 'Hannover', '303': 'Hannover', '304': 'Hannover',
+  '305': 'Hannover', '306': 'Hannover',
+  // ─── Wolfsburg ───
+  '384': 'Wolfsburg', '385': 'Wolfsburg',
+  // ─── Braunschweig (381–384) ───
+  '381': 'Braunschweig', '382': 'Braunschweig', '383': 'Braunschweig',
+  // ─── Göttingen ───
+  '370': 'Göttingen', '371': 'Göttingen', '372': 'Göttingen',
+  // ─── Osnabrück (490–492) ───
+  '490': 'Osnabrück', '491': 'Osnabrück', '492': 'Osnabrück',
+  // ─── Oldenburg (260–263) ───
+  '260': 'Oldenburg', '261': 'Oldenburg', '262': 'Oldenburg', '263': 'Oldenburg',
+  // ─── Bielefeld (336–337) ───
+  '336': 'Bielefeld', '337': 'Bielefeld',
+  // ─── Paderborn (330–331) ───
+  '330': 'Paderborn', '331': 'Paderborn',
+  // ─── Kassel (341–343) ───
+  '341': 'Kassel', '342': 'Kassel', '343': 'Kassel',
+  // ─── Magdeburg (390–393) ───
+  '390': 'Magdeburg', '391': 'Magdeburg', '392': 'Magdeburg', '393': 'Magdeburg',
+  // ─── Halle (060–062) ───
+  '060': 'Halle', '061': 'Halle', '062': 'Halle',
+  // ─── Leipzig (041–044) ───
   '041': 'Leipzig', '042': 'Leipzig', '043': 'Leipzig', '044': 'Leipzig',
-  // Dresden
-  '010': 'Dresden', '011': 'Dresden', '012': 'Dresden', '013': 'Dresden',
-  // Chemnitz
+  // ─── Dresden (010–014) ───
+  '010': 'Dresden', '011': 'Dresden', '012': 'Dresden', '013': 'Dresden', '014': 'Dresden',
+  // ─── Chemnitz (090–092) ───
   '090': 'Chemnitz', '091': 'Chemnitz', '092': 'Chemnitz',
-  // Erfurt
+  // ─── Zwickau ───
+  '080': 'Zwickau', '081': 'Zwickau',
+  // ─── Erfurt (990–992) ───
   '990': 'Erfurt', '991': 'Erfurt', '992': 'Erfurt',
-  // Rostock
-  '180': 'Rostock', '181': 'Rostock', '182': 'Rostock',
-  // Magdeburg
-  '390': 'Magdeburg', '391': 'Magdeburg', '392': 'Magdeburg',
-  // Halle
-  '060': 'Halle', '061': 'Halle',
-  // Potsdam
-  '144': 'Potsdam', '145': 'Potsdam', '146': 'Potsdam', '147': 'Potsdam',
-  // Düsseldorf
-  '401': 'Düsseldorf', '402': 'Düsseldorf', '403': 'Düsseldorf', '404': 'Düsseldorf', '405': 'Düsseldorf',
-  // Köln
-  '506': 'Köln', '507': 'Köln', '508': 'Köln', '509': 'Köln', '510': 'Köln', '511': 'Köln',
-  // Bonn
-  '531': 'Bonn', '532': 'Bonn', '533': 'Bonn',
-  // Dortmund
-  '440': 'Dortmund', '441': 'Dortmund', '442': 'Dortmund', '443': 'Dortmund', '444': 'Dortmund',
-  // Essen
+  // ─── Jena ───
+  '076': 'Jena', '077': 'Jena',
+  // ─── Gera ───
+  '074': 'Gera', '075': 'Gera',
+  // ─── Weimar ───
+  '994': 'Weimar', '995': 'Weimar',
+  // ─── Düsseldorf (400–406) ───
+  '400': 'Düsseldorf', '401': 'Düsseldorf', '402': 'Düsseldorf', '403': 'Düsseldorf',
+  '404': 'Düsseldorf', '405': 'Düsseldorf', '406': 'Düsseldorf',
+  // ─── Duisburg (470–478) ───
+  '470': 'Duisburg', '471': 'Duisburg', '472': 'Duisburg', '473': 'Duisburg',
+  '474': 'Duisburg', '475': 'Duisburg', '476': 'Duisburg', '477': 'Duisburg', '478': 'Duisburg',
+  // ─── Essen (451–453) ───
   '451': 'Essen', '452': 'Essen', '453': 'Essen',
-  // Bochum
+  // ─── Oberhausen ───
+  '460': 'Oberhausen', '461': 'Oberhausen', '462': 'Oberhausen',
+  // ─── Bochum (447–449) ───
   '447': 'Bochum', '448': 'Bochum', '449': 'Bochum',
-  // Münster
+  // ─── Dortmund (440–444) ───
+  '440': 'Dortmund', '441': 'Dortmund', '442': 'Dortmund', '443': 'Dortmund', '444': 'Dortmund',
+  // ─── Hagen ───
+  '580': 'Hagen', '581': 'Hagen',
+  // ─── Hamm ───
+  '590': 'Hamm', '591': 'Hamm',
+  // ─── Herne ───
+  '445': 'Herne', '446': 'Herne',
+  // ─── Gelsenkirchen ───
+  '458': 'Gelsenkirchen', '459': 'Gelsenkirchen',
+  // ─── Bottrop ───
+  '464': 'Bottrop',
+  // ─── Recklinghausen ───
+  '456': 'Recklinghausen', '457': 'Recklinghausen',
+  // ─── Münster (481–483) ───
   '481': 'Münster', '482': 'Münster', '483': 'Münster',
-  // Frankfurt
+  // ─── Wuppertal (420–424) ───
+  '420': 'Wuppertal', '421': 'Wuppertal', '422': 'Wuppertal', '423': 'Wuppertal', '424': 'Wuppertal',
+  // ─── Krefeld ───
+  '477': 'Krefeld', '478': 'Krefeld',
+  // ─── Mönchengladbach ───
+  '411': 'Mönchengladbach', '412': 'Mönchengladbach', '413': 'Mönchengladbach',
+  // ─── Neuss ───
+  '414': 'Neuss', '415': 'Neuss',
+  // ─── Leverkusen ───
+  '513': 'Leverkusen', '514': 'Leverkusen',
+  // ─── Solingen ───
+  '427': 'Solingen', '428': 'Solingen',
+  // ─── Remscheid ───
+  '425': 'Remscheid', '426': 'Remscheid',
+  // ─── Köln (506–511) ───
+  '506': 'Köln', '507': 'Köln', '508': 'Köln', '509': 'Köln', '510': 'Köln', '511': 'Köln',
+  '512': 'Köln',
+  // ─── Bonn (531–534) ───
+  '531': 'Bonn', '532': 'Bonn', '533': 'Bonn', '534': 'Bonn',
+  // ─── Aachen (520–524) ───
+  '520': 'Aachen', '521': 'Aachen', '522': 'Aachen', '523': 'Aachen', '524': 'Aachen',
+  // ─── Frankfurt am Main (600–609) ───
   '600': 'Frankfurt', '601': 'Frankfurt', '602': 'Frankfurt', '603': 'Frankfurt', '604': 'Frankfurt',
-  '605': 'Frankfurt', '606': 'Frankfurt', '607': 'Frankfurt', '608': 'Frankfurt',
-  // Stuttgart
-  '700': 'Stuttgart', '701': 'Stuttgart', '702': 'Stuttgart', '703': 'Stuttgart', '704': 'Stuttgart',
-  '705': 'Stuttgart', '706': 'Stuttgart', '707': 'Stuttgart',
-  // Karlsruhe
-  '760': 'Karlsruhe', '761': 'Karlsruhe', '762': 'Karlsruhe',
-  // Mannheim
+  '605': 'Frankfurt', '606': 'Frankfurt', '607': 'Frankfurt', '608': 'Frankfurt', '609': 'Frankfurt',
+  // ─── Wiesbaden (650–651) ───
+  '650': 'Wiesbaden', '651': 'Wiesbaden',
+  // ─── Mainz (551–553) ───
+  '551': 'Mainz', '552': 'Mainz', '553': 'Mainz',
+  // ─── Darmstadt (641–643) ───
+  '641': 'Darmstadt', '642': 'Darmstadt', '643': 'Darmstadt',
+  // ─── Kassel (erneut 341-343) schon oben
+  // ─── Heidelberg (691–693) ───
+  '691': 'Heidelberg', '692': 'Heidelberg', '693': 'Heidelberg',
+  // ─── Mannheim (681–683) ───
   '681': 'Mannheim', '682': 'Mannheim', '683': 'Mannheim',
-  // München
+  // ─── Karlsruhe (760–762) ───
+  '760': 'Karlsruhe', '761': 'Karlsruhe', '762': 'Karlsruhe',
+  // ─── Freiburg im Breisgau (790–793) ───
+  '790': 'Freiburg', '791': 'Freiburg', '792': 'Freiburg', '793': 'Freiburg',
+  // ─── Stuttgart (700–708) ───
+  '700': 'Stuttgart', '701': 'Stuttgart', '702': 'Stuttgart', '703': 'Stuttgart', '704': 'Stuttgart',
+  '705': 'Stuttgart', '706': 'Stuttgart', '707': 'Stuttgart', '708': 'Stuttgart',
+  // ─── Ulm (890–891) ───
+  '890': 'Ulm', '891': 'Ulm',
+  // ─── Heilbronn (740–742) ───
+  '740': 'Heilbronn', '741': 'Heilbronn', '742': 'Heilbronn',
+  // ─── Pforzheim (751–753) ───
+  '751': 'Pforzheim', '752': 'Pforzheim', '753': 'Pforzheim',
+  // ─── Reutlingen ───
+  '721': 'Reutlingen',
+  // ─── Tübingen ───
+  '720': 'Tübingen',
+  // ─── München (800–818) ───
   '800': 'München', '801': 'München', '802': 'München', '803': 'München', '804': 'München',
   '805': 'München', '806': 'München', '807': 'München', '808': 'München', '809': 'München',
   '810': 'München', '811': 'München', '812': 'München', '813': 'München', '814': 'München',
   '815': 'München', '816': 'München', '817': 'München', '818': 'München',
-  // Augsburg
+  // ─── Augsburg (860–862) ───
   '860': 'Augsburg', '861': 'Augsburg', '862': 'Augsburg',
-  // Nürnberg
+  // ─── Ingolstadt (850–851) ───
+  '850': 'Ingolstadt', '851': 'Ingolstadt',
+  // ─── Regensburg (930–934) ───
+  '930': 'Regensburg', '931': 'Regensburg', '932': 'Regensburg', '933': 'Regensburg', '934': 'Regensburg',
+  // ─── Würzburg (970–972) ───
+  '970': 'Würzburg', '971': 'Würzburg', '972': 'Würzburg',
+  // ─── Nürnberg (900–906) ───
   '900': 'Nürnberg', '901': 'Nürnberg', '902': 'Nürnberg', '903': 'Nürnberg', '904': 'Nürnberg',
-  '905': 'Nürnberg',
+  '905': 'Nürnberg', '906': 'Nürnberg',
+  // ─── Erlangen ───
+  '910': 'Erlangen', '911': 'Erlangen',
+  // ─── Fürth ───
+  '907': 'Fürth', '908': 'Fürth',
+  // ─── Saarbrücken (660–663) ───
+  '660': 'Saarbrücken', '661': 'Saarbrücken', '662': 'Saarbrücken', '663': 'Saarbrücken',
+  // ─── Kaiserslautern (675–676) ───
+  '675': 'Kaiserslautern', '676': 'Kaiserslautern',
+  // ─── Trier ───
+  '542': 'Trier', '543': 'Trier', '544': 'Trier',
+  // ─── Koblenz ───
+  '560': 'Koblenz', '561': 'Koblenz',
+  // ─── Münster (481–483) already above
+  // ─── Lüneburg ───
+  '213': 'Lüneburg',
+
+  // ─── 2-digit fallback prefixes (less precise, for smaller towns) ───
+  '01': 'Dresden',    // Sachsen Ost
+  '02': 'Görlitz',
+  '03': 'Cottbus',
+  '04': 'Leipzig',
+  '06': 'Halle',
+  '07': 'Gera',
+  '08': 'Zwickau',
+  '09': 'Chemnitz',
+  '17': 'Schwerin',
+  '18': 'Rostock',
+  '19': 'Schwerin',
+  '26': 'Oldenburg',
+  '27': 'Bremerhaven',
+  '28': 'Bremen',
+  '33': 'Paderborn',
+  '37': 'Göttingen',
+  '38': 'Braunschweig',
+  '39': 'Magdeburg',
+  '42': 'Wuppertal',
+  '46': 'Oberhausen',
+  '49': 'Osnabrück',
+  '52': 'Aachen',
+  '54': 'Trier',
+  '56': 'Koblenz',
+  '58': 'Hagen',
+  '59': 'Hamm',
+  '65': 'Wiesbaden',
+  '67': 'Kaiserslautern',
+  '69': 'Heidelberg',
+  '72': 'Tübingen',
+  '74': 'Heilbronn',
+  '75': 'Pforzheim',
+  '79': 'Freiburg',
+  '85': 'Ingolstadt',
+  '86': 'Augsburg',
+  '89': 'Ulm',
+  '93': 'Regensburg',
+  '97': 'Würzburg',
+  '99': 'Erfurt',
 }
 
 function cityFromPlz(plz: string): string | undefined {
@@ -196,23 +362,42 @@ function extractCityFromUrl(url: string): string | undefined {
 
 function buildAdidLocationMap(html: string): Map<string, { city: string; plz?: string }> {
   // Build a map of adid → {city, plz} by scanning each article card in the HTML.
-  // Each card has data-adid="..." and somewhere nearby a "PLZ Stadtname" text.
   const map = new Map<string, { city: string; plz?: string }>()
-  const cardPattern = /data-adid="(\d+)"([\s\S]{0,2000}?)(?=data-adid="|$)/g
+  const cardPattern = /data-adid="(\d+)"([\s\S]{0,2500}?)(?=data-adid="|$)/g
   let m: RegExpExecArray | null
   while ((m = cardPattern.exec(html)) !== null) {
     const adid = m[1]
     const snippet = m[2]
-    // Prefer explicit PLZ + city
+
+    // 1. Prefer explicit "PLZ Stadtname" pattern
     const plzCity = snippet.match(/(\d{5})\s+([A-ZÄÖÜa-zäöüß][A-ZÄÖÜa-zäöüß\s\-]{1,25})(?:<|\s*[,·])/)
     if (plzCity) {
       map.set(adid, { plz: plzCity[1], city: plzCity[2].trim() })
       continue
     }
-    // Fallback: look for PLZ anywhere in snippet
+
+    // 2. Location span / badge (Kleinanzeigen uses various class names)
+    const locSpan = snippet.match(/(?:aditem-main--top--left|ad-listitem-detail-location|locality|adlocation)[^>]*?>([^<]{2,40})</)
+    if (locSpan) {
+      const raw = locSpan[1].trim()
+      const withPlz = raw.match(/^(\d{5})\s+(.+)/)
+      if (withPlz) { map.set(adid, { plz: withPlz[1], city: withPlz[2].trim() }); continue }
+      if (!/^\d/.test(raw) && raw.length > 2) { map.set(adid, { city: raw }); continue }
+    }
+
+    // 3. PLZ anywhere → use PLZ map to derive city
     const plzOnly = snippet.match(/(\d{5})/)
     if (plzOnly) {
-      map.set(adid, { plz: plzOnly[1], city: 'Unbekannt' })
+      const derived = cityFromPlz(plzOnly[1])
+      map.set(adid, { plz: plzOnly[1], city: derived ?? 'Unbekannt' })
+      continue
+    }
+
+    // 4. City name directly in snippet (scan against known list)
+    const strippedSnippet = snippet.replace(/<[^>]+>/g, ' ')
+    const cityFromText = extractCityFromText(strippedSnippet)
+    if (cityFromText) {
+      map.set(adid, { city: cityFromText })
     }
   }
   return map
