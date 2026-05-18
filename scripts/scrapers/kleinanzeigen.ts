@@ -21,7 +21,17 @@ const SEARCH_URLS: Array<{ url: string; pages: number; city?: string }> = [
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/freizeitgrundstück/k0', pages: 10 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/wochenendgrundstück/k0', pages: 5 },
   { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/gartenparzelle/k0', pages: 5 },
-  // City-specific URLs for major metros
+  // ── State-level URLs (catch everything PLZ extraction misses) ──
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/bayern/kleingarten/k0c207l5510', pages: 10 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/bayern/schrebergarten/k0c207l5510', pages: 10 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/nordrhein-westfalen/kleingarten/k0c207l2444', pages: 10 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/niedersachsen/kleingarten/k0c207l2439', pages: 8 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/sachsen/kleingarten/k0c207l2443', pages: 8 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/brandenburg/kleingarten/k0c207l2429', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/thueringen/kleingarten/k0c207l2445', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/hessen/kleingarten/k0c207l2434', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/baden-wuerttemberg/kleingarten/k0c207l2427', pages: 5 },
+  // ── City-specific URLs for major metros ──
   { url: 'https://www.kleinanzeigen.de/s-hamburg/kleingarten/k0c207l9409', pages: 5, city: 'Hamburg' },
   { url: 'https://www.kleinanzeigen.de/s-muenchen/kleingarten/k0c207l6314', pages: 5, city: 'München' },
   { url: 'https://www.kleinanzeigen.de/s-frankfurt-am-main/kleingarten/k0c207l39', pages: 5, city: 'Frankfurt' },
