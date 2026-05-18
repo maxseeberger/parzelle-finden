@@ -1,13 +1,24 @@
 import { notFound } from 'next/navigation'
-import { ExternalLink, Phone, Mail, MapPin, Users, Euro } from 'lucide-react'
-import { MOCK_VEREINE } from '@/lib/mock-data'
+import type { Metadata } from 'next'
+import { ExternalLink, Phone, Mail, MapPin, Globe } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import WartelisteBadge from '@/components/WartelisteBadge'
 
 type Props = { params: Promise<{ slug: string }> }
 
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params
+  const { data } = await supabase.from('vereine').select('name,city,bundesland').eq('id', slug).single()
+  if (!data) return {}
+  return {
+    title: `${data.name} — Kleingarten ${data.city || data.bundesland}`,
+    description: `Wartelisten-Status, Kontakt und Informationen für ${data.name}.`,
+  }
+}
+
 export default async function VereinDetailPage({ params }: Props) {
   const { slug } = await params
-  const verein = MOCK_VEREINE.find(v => v.id === slug)
+  const { data: verein } = await supabase.from('vereine').select('*').eq('id', slug).single()
   if (!verein) notFound()
 
   return (
@@ -16,67 +27,46 @@ export default async function VereinDetailPage({ params }: Props) {
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{verein.name}</h1>
-            <p className="text-gray-500 flex items-center gap-1">
-              <MapPin size={14} /> {verein.address}, {verein.plz} {verein.city}
-            </p>
+            {(verein.city || verein.bundesland) && (
+              <p className="text-gray-500 flex items-center gap-1 text-sm">
+                <MapPin size={14} />
+                {verein.plz && `${verein.plz} `}{verein.city && verein.city !== 'Unbekannt' ? verein.city : verein.bundesland}
+              </p>
+            )}
           </div>
           <WartelisteBadge status={verein.warteliste_status} />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {verein.parzellen_anzahl && (
-            <div className="text-center p-4 rounded-xl" style={{ backgroundColor: 'var(--green-pale)' }}>
-              <div className="text-xl font-bold" style={{ color: 'var(--green-primary)' }}>{verein.parzellen_anzahl}</div>
-              <div className="text-xs text-gray-500 mt-1">Parzellen</div>
-            </div>
-          )}
-          {verein.warteliste_laenge && (
-            <div className="text-center p-4 rounded-xl bg-orange-50">
-              <div className="text-xl font-bold text-orange-600">{verein.warteliste_laenge}</div>
-              <div className="text-xs text-gray-500 mt-1">auf Warteliste</div>
-            </div>
-          )}
-          {verein.jahresbeitrag && (
-            <div className="text-center p-4 rounded-xl bg-blue-50">
-              <div className="text-xl font-bold text-blue-600">€{verein.jahresbeitrag}</div>
-              <div className="text-xs text-gray-500 mt-1">Jahresbeitrag</div>
-            </div>
-          )}
-          <div className="text-center p-4 rounded-xl bg-gray-50">
-            <div className="text-xl font-bold text-gray-600">{verein.bundesland}</div>
-            <div className="text-xs text-gray-500 mt-1">Bundesland</div>
-          </div>
-        </div>
-
-        <div className="space-y-3 mb-8">
-          <h2 className="font-semibold text-gray-900">Kontakt</h2>
+        <div className="grid grid-cols-1 gap-3 mb-6">
           {verein.website && (
-            <a
-              href={verein.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm hover:underline"
-              style={{ color: 'var(--green-primary)' }}
-            >
-              <ExternalLink size={15} /> {verein.website}
+            <a href={verein.website} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-100 hover:border-green-300 transition-colors text-sm"
+              style={{ color: 'var(--green-primary)' }}>
+              <Globe size={15} /> Vereins-Website besuchen <ExternalLink size={12} className="ml-auto" />
             </a>
           )}
           {verein.phone && (
-            <a href={`tel:${verein.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
+            <a href={`tel:${verein.phone}`}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-100 hover:border-gray-300 transition-colors text-sm text-gray-700">
               <Phone size={15} /> {verein.phone}
             </a>
           )}
           {verein.email && (
-            <a href={`mailto:${verein.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
+            <a href={`mailto:${verein.email}`}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-100 hover:border-gray-300 transition-colors text-sm text-gray-700">
               <Mail size={15} /> {verein.email}
             </a>
           )}
         </div>
 
-        <div className="border-t border-gray-100 pt-5 text-xs text-gray-400">
-          Daten zuletzt aktualisiert: {new Date(verein.last_updated).toLocaleDateString('de-DE')}
-          {' · '}
-          <a href="#" className="hover:underline">Fehler melden</a>
+        {!verein.website && !verein.phone && !verein.email && (
+          <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-500 text-center">
+            Noch keine Kontaktdaten verfügbar — direkt beim Verein anfragen.
+          </div>
+        )}
+
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          <p className="text-xs text-gray-400">Wartelisten-Status: {verein.warteliste_status ?? 'unbekannt'} · Zuletzt aktualisiert: {verein.last_updated ? new Date(verein.last_updated).toLocaleDateString('de-DE') : '—'}</p>
         </div>
       </div>
     </div>

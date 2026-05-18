@@ -31,7 +31,7 @@ export default async function CityPage({ params }: Props) {
 
   const [{ data: listingsData }, { data: vereineData }] = await Promise.all([
     supabase.from('listings').select('*').ilike('city', `%${city.name}%`).eq('active', true).order('posted_at', { ascending: false }).limit(20),
-    supabase.from('vereine').select('*').eq('bundesland', city.bundesland).order('warteliste_status', { ascending: true }).limit(50),
+    supabase.from('vereine').select('*').ilike('bundesland', city.bundesland).order('warteliste_status', { ascending: true }).limit(50),
   ])
 
   const cityListings: Listing[] = listingsData ?? []
@@ -134,23 +134,57 @@ export default async function CityPage({ params }: Props) {
             )}
           </section>
 
-          {/* SEO text block */}
-          <section className="prose prose-sm prose-gray max-w-none">
-            <h2>Kleingarten {city.name} — was du wissen musst</h2>
-            <p>
-              In {city.name} gibt es {city.verein_count} Kleingartenvereine mit insgesamt tausenden Parzellen.
-              Die durchschnittliche Ablöse liegt bei <strong>€{city.avg_abloese?.toLocaleString('de-DE')}</strong> —
-              allerdings mit großen Unterschieden je nach Lage, Größe und Zustand der Laube.
-            </p>
-            <p>
-              Wer einen Kleingarten in {city.name} sucht, hat grundsätzlich drei Wege:
-              über die offizielle <strong>Warteliste</strong> eines Vereins, über eine <strong>Ablöse</strong> von
-              einem abgebenden Pächter, oder über eine Direktvergabe des Vereins bei freistehenden Parzellen.
-            </p>
-            <p>
-              Tipp: Meld dich bei mehreren Vereinen gleichzeitig auf der Warteliste an — das ist erlaubt und
-              erhöht deine Chancen erheblich. Vereine mit offener Warteliste erkennst du an dem grünen Badge oben.
-            </p>
+          {/* Info + useful links section */}
+          <section className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Kleingarten {city.name} — wichtige Infos</h2>
+
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 text-sm text-gray-600 space-y-3">
+              <p>
+                In {city.name} ({city.bundesland}) gibt es {cityVereine.length > 0 ? `${cityVereine.length}+` : 'viele'} Kleingartenvereine.
+                {city.avg_abloese && ` Die durchschnittliche Ablöse liegt bei €${city.avg_abloese.toLocaleString('de-DE')} — je nach Lage, Größe und Zustand der Laube deutlich mehr oder weniger.`}
+              </p>
+              <p>
+                Es gibt drei Wege zu einem Kleingarten: über die <strong>Warteliste</strong> eines Vereins,
+                über eine <strong>Ablöse</strong> von einem abgebenden Pächter, oder direkt über den Verein
+                bei freistehenden Parzellen.
+              </p>
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-400 font-medium mb-2">Tipps:</p>
+                <ul className="space-y-1 text-xs text-gray-500">
+                  <li>✓ Bei mehreren Vereinen gleichzeitig auf die Warteliste setzen lassen</li>
+                  <li>✓ Wartelisten-Eintrag jährlich bestätigen — sonst erlischt er</li>
+                  <li>✓ Handwerkerobjekte (renovierungsbedürftig) sind die günstigste Option</li>
+                  <li>✓ Ablöse vor Vertragsschluss unabhängig bewerten lassen</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <a href="/ratgeber/warteliste"
+                className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100 hover:border-green-300 transition-colors text-sm"
+                style={{ color: 'var(--green-primary)' }}>
+                <span>📋 Wie funktioniert eine Warteliste?</span>
+                <span>→</span>
+              </a>
+              <a href="/ratgeber/abloese"
+                className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100 hover:border-green-300 transition-colors text-sm"
+                style={{ color: 'var(--green-primary)' }}>
+                <span>💶 Was ist eine faire Ablöse?</span>
+                <span>→</span>
+              </a>
+              <a href="/ratgeber/bundeskleingartengesetz"
+                className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100 hover:border-green-300 transition-colors text-sm"
+                style={{ color: 'var(--green-primary)' }}>
+                <span>📖 Das Bundeskleingartengesetz einfach erklärt</span>
+                <span>→</span>
+              </a>
+              <a href="/ratgeber/kosten"
+                className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100 hover:border-green-300 transition-colors text-sm"
+                style={{ color: 'var(--green-primary)' }}>
+                <span>🧮 Was kostet ein Kleingarten wirklich?</span>
+                <span>→</span>
+              </a>
+            </div>
           </section>
         </div>
 

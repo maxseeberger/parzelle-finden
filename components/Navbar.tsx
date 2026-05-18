@@ -12,8 +12,8 @@ export default function Navbar() {
         <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
           <Link href="/vereine" className="hover:text-gray-900 transition-colors">Vereine</Link>
           <Link href="/ratgeber" className="hover:text-gray-900 transition-colors">Ratgeber</Link>
-          <Link href="/warteliste" className="hover:text-gray-900 transition-colors">Warteliste</Link>
-          <Link href="/abloese" className="hover:text-gray-900 transition-colors">Ablöse</Link>
+          <Link href="/ratgeber/warteliste" className="hover:text-gray-900 transition-colors">Warteliste</Link>
+          <Link href="/ratgeber/abloese" className="hover:text-gray-900 transition-colors">Ablöse</Link>
         </nav>
         <Link
           href="/#suche"

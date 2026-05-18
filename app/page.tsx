@@ -47,7 +47,7 @@ export default function HomePage() {
         <div className="relative max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full mb-6 text-green-200 border border-green-700/50 bg-green-900/30">
             <CheckCircle size={13} />
-            Neu: Wartelisten-Status für 13.000+ Vereine
+            6.200+ Kleingartenvereine in Deutschland
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
             Deinen Kleingarten finden.<br />
@@ -109,6 +109,24 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 leading-relaxed">{step.desc}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Two paths CTA */}
+      <section className="py-10 px-4 bg-gray-50">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Link href="/vereine" className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-green-200 transition-all">
+            <div className="text-2xl mb-3">📋</div>
+            <h3 className="font-bold text-gray-900 mb-1">Warteliste eintragen</h3>
+            <p className="text-sm text-gray-500">Meld dich bei Vereinen mit offener Warteliste an — kostenlos und direkt.</p>
+            <span className="inline-block mt-3 text-sm font-medium" style={{ color: 'var(--green-primary)' }}>Vereine durchsuchen →</span>
+          </Link>
+          <Link href="/#suche" className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-green-200 transition-all">
+            <div className="text-2xl mb-3">🔍</div>
+            <h3 className="font-bold text-gray-900 mb-1">Freie Parzelle finden</h3>
+            <p className="text-sm text-gray-500">Suche nach freien Parzellen mit Ablöse — direkt von abgebenden Pächtern.</p>
+            <span className="inline-block mt-3 text-sm font-medium" style={{ color: 'var(--green-primary)' }}>Stadt wählen →</span>
+          </Link>
         </div>
       </section>
 
