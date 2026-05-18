@@ -38,6 +38,21 @@ const SEARCH_URLS: Array<{ url: string; pages: number; city?: string }> = [
   { url: 'https://www.kleinanzeigen.de/s-koeln/kleingarten/k0c207l96', pages: 5, city: 'Köln' },
   { url: 'https://www.kleinanzeigen.de/s-stuttgart/kleingarten/k0c207l102', pages: 5, city: 'Stuttgart' },
   { url: 'https://www.kleinanzeigen.de/s-duesseldorf/kleingarten/k0c207l63', pages: 5, city: 'Düsseldorf' },
+  { url: 'https://www.kleinanzeigen.de/s-berlin/kleingarten/k0c207l3331', pages: 8, city: 'Berlin' },
+  { url: 'https://www.kleinanzeigen.de/s-dresden/kleingarten/k0c207l41', pages: 5, city: 'Dresden' },
+  { url: 'https://www.kleinanzeigen.de/s-leipzig/kleingarten/k0c207l183', pages: 5, city: 'Leipzig' },
+  // ── Missing states ──
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/mecklenburg-vorpommern/kleingarten/k0c207l2436', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/sachsen-anhalt/kleingarten/k0c207l2442', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/rheinland-pfalz/kleingarten/k0c207l2441', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/schleswig-holstein/kleingarten/k0c207l2458', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/saarland/kleingarten/k0c207l2447', pages: 3 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/bremen/kleingarten/k0c207l2430', pages: 3 },
+  // ── Additional keywords (catch synonym listings national-wide) ──
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/nachpächter/k0', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/freizeitgarten/k0', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/erholungsgarten/k0', pages: 3 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/wochenendparzelle/k0', pages: 3 },
 ]
 const DELAY_MS = 2500
 
@@ -419,8 +434,92 @@ function buildAdidLocationMap(html: string): Map<string, { city: string; plz?: s
   return map
 }
 
+/**
+ * Attempt to extract listings from Next.js __NEXT_DATA__ JSON blob.
+ * Kleinanzeigen embeds structured ad data here with clean city/PLZ fields.
+ * Returns [] if the blob isn't present or doesn't match expected shape.
+ */
+function parseNextData(html: string, forcedCity?: string): ParsedListing[] {
+  const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/)
+  if (!m) return []
+
+  let root: Record<string, unknown>
+  try { root = JSON.parse(m[1]) } catch { return [] }
+
+  // Navigate to ad list — Kleinanzeigen nests this differently across page types
+  // Attempt common paths:
+  const candidates: unknown[] = []
+  const tryPath = (obj: unknown, ...keys: string[]) => {
+    let cur: unknown = obj
+    for (const k of keys) {
+      if (!cur || typeof cur !== 'object') return
+      cur = (cur as Record<string, unknown>)[k]
+    }
+    if (Array.isArray(cur)) candidates.push(...cur)
+  }
+  tryPath(root, 'props', 'pageProps', 'ads')
+  tryPath(root, 'props', 'pageProps', 'srp', 'ads')
+  tryPath(root, 'props', 'pageProps', 'adList')
+  tryPath(root, 'props', 'pageProps', 'data', 'ads')
+
+  const listings: ParsedListing[] = []
+
+  for (const ad of candidates) {
+    if (!ad || typeof ad !== 'object') continue
+    const a = ad as Record<string, unknown>
+    const adId = String(a.adId ?? a.id ?? '').replace(/\D/g, '')
+    const title = String(a.title ?? a.name ?? '').trim()
+    if (!adId || !title) continue
+
+    // Price
+    const priceObj = a.price as Record<string, unknown> | undefined
+    const priceAmount = priceObj?.amount ?? priceObj?.value ?? a.price
+    const price = typeof priceAmount === 'number'
+      ? priceAmount
+      : parseInt(String(priceAmount ?? '').replace(/\D/g, '')) || undefined
+
+    // Location — Kleinanzeigen uses locations[] array or address object
+    let plz: string | undefined
+    let city: string = forcedCity ?? 'Unbekannt'
+
+    const locations = a.locations as Array<Record<string, unknown>> | undefined
+    if (Array.isArray(locations) && locations.length > 0) {
+      const loc = locations[0]
+      plz = String(loc.zipCode ?? loc.postalCode ?? '').trim() || undefined
+      const locName = String(loc.name ?? loc.city ?? '').trim()
+      if (locName) city = forcedCity ?? locName
+    } else if (a.address && typeof a.address === 'object') {
+      const addr = a.address as Record<string, unknown>
+      plz = String(addr.postalCode ?? addr.zipCode ?? '').trim() || undefined
+      const locName = String(addr.addressLocality ?? addr.city ?? '').trim()
+      if (locName) city = forcedCity ?? locName
+    }
+
+    // PLZ fallback → derive city from our lookup table
+    if (plz && city === 'Unbekannt') {
+      city = forcedCity ?? cityFromPlz(plz) ?? 'Unbekannt'
+    }
+
+    listings.push({
+      external_id: adId,
+      title,
+      price_abloese: price && price > 0 ? price : undefined,
+      city,
+      plz,
+      contact_url: `https://www.kleinanzeigen.de/s-anzeige/${adId}.html`,
+      posted_at: String(a.postedAt ?? a.datePosted ?? a.createdAt ?? new Date().toISOString()),
+    })
+  }
+
+  return listings
+}
+
 function parseListings(html: string, forcedCity?: string): ParsedListing[] {
   const listings: ParsedListing[] = []
+
+  // 0. Try __NEXT_DATA__ JSON (best structured data, cleanest city/PLZ)
+  const nextDataListings = parseNextData(html, forcedCity)
+  if (nextDataListings.length > 0) return nextDataListings
 
   // Pre-build location map from HTML cards so we have city data for every ad
   const locationMap = buildAdidLocationMap(html)
