@@ -118,10 +118,19 @@ function extractSizeFromTitle(title: string): number | undefined {
 const KLEINGARTEN_KEYWORDS = [
   'kleingarten', 'schrebergarten', 'parzelle', 'laube', 'kgv', 'gartenverein',
   'gartenanlage', 'zu verpachten', 'zu pachten', 'gartenparzelle',
+  'freizeitgrundstück', 'wochenendgrundstück', 'datsche',
+  'gartenkolonie', 'gartenlaube', 'erholungsgarten', 'freizeitgarten',
+  'nachpächter', 'laubengrundstück', 'pachtgarten',
+]
+
+const NEGATIVE_KEYWORDS = [
+  'kindergarten', 'gartenservice', 'gartenpflege', 'gartenbau',
+  'gartenmöbel', 'gartengeräte', 'caravan', 'wohnwagen', 'campingplatz', 'stellplatz',
 ]
 
 function isKleingarten(title: string): boolean {
   const lower = title.toLowerCase()
+  if (NEGATIVE_KEYWORDS.some(kw => lower.includes(kw))) return false
   return KLEINGARTEN_KEYWORDS.some(kw => lower.includes(kw))
 }
 

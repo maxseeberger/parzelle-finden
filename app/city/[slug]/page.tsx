@@ -54,22 +54,24 @@ export default async function CityPage({ params }: Props) {
             Freie Parzellen, Vereins-Wartelisten & Ablöse-Preise — alles auf einen Blick
           </p>
           <div className="flex flex-wrap gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--green-pale)' }}>
-                <MapPin size={15} style={{ color: 'var(--green-primary)' }} />
+            {cityListings.length > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--green-pale)' }}>
+                  <MapPin size={15} style={{ color: 'var(--green-primary)' }} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{cityListings.length} Inserate</div>
+                  <div className="text-xs text-gray-400">aktuell aktiv</div>
+                </div>
               </div>
-              <div>
-                <div className="text-sm font-semibold text-gray-900">{city.listing_count} Inserate</div>
-                <div className="text-xs text-gray-400">aktuell aktiv</div>
-              </div>
-            </div>
+            )}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--green-pale)' }}>
                 <Users size={15} style={{ color: 'var(--green-primary)' }} />
               </div>
               <div>
-                <div className="text-sm font-semibold text-gray-900">{city.verein_count} Vereine</div>
-                <div className="text-xs text-gray-400">in {city.name}</div>
+                <div className="text-sm font-semibold text-gray-900">{cityVereine.length} Vereine</div>
+                <div className="text-xs text-gray-400">in {city.bundesland}</div>
               </div>
             </div>
             {city.avg_abloese && (

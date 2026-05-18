@@ -81,24 +81,32 @@ function parseQuokaListings(html: string): ParsedListing[] {
 
   if (listings.length > 0) return listings
 
-  // Fallback: href pattern for quoka listings /p-xxx-xxx.html
-  const linkMatches = [...html.matchAll(/href="(https?:\/\/www\.quoka\.de\/[^"]+\.html)"/g)]
-  const titleMatches = [...html.matchAll(/class="[^"]*(?:title|headline|adtitle)[^"]*"[^>]*>([^<]{5,120})</g)]
+  // Fallback: try both absolute and relative quoka listing URLs
+  const absLinks = [...html.matchAll(/href="(https?:\/\/www\.quoka\.de\/[^"]+\.html)"/g)]
+  const relLinks = [...html.matchAll(/href="(\/(?:de_detail[^"]+|p-[^"]+)\.html)"/g)]
+    .map(m => ({ ...m, 1: `https://www.quoka.de${m[1]}` }) as RegExpExecArray)
+  const allLinks = [...absLinks, ...relLinks]
 
-  for (let i = 0; i < linkMatches.length; i++) {
-    const url = linkMatches[i][1]
-    const idMatch = url.match(/-(\d+)\.html$/)
+  // Collect title candidates from any heading/span with title-like class names
+  const titleCandidates = [...html.matchAll(/<(?:h[1-4]|span|strong|a)[^>]*class="[^"]*(?:title|headline|name|subject|ad-title)[^"]*"[^>]*>([^<]{5,150})<\//g)]
+    .map(m => m[1].trim())
+
+  for (let i = 0; i < allLinks.length; i++) {
+    const url = allLinks[i][1]
+    const idMatch = url.match(/[~_-](\d{6,})/) ?? url.match(/adId~(\d+)/) ?? url.match(/-(\d+)\.html$/)
     if (!idMatch) continue
-    const title = titleMatches[i]?.[1]?.trim() ?? 'Kleingarten Angebot'
 
-    // Extract PLZ+city from surrounding HTML
-    const idx = linkMatches[i].index ?? 0
-    const snippet = html.slice(Math.max(0, idx - 200), idx + 500)
+    const title = titleCandidates[i]?.trim() ?? 'Kleingarten Angebot'
+    const idx = allLinks[i].index ?? 0
+    const snippet = html.slice(Math.max(0, idx - 300), idx + 600)
     const plzCity = snippet.match(/(\d{5})\s+([A-ZÄÖÜa-zäöüß][a-zäöüß\s\-]{2,25})/)
+    const priceMatch = snippet.match(/(\d[\d.,]+)\s*(?:€|EUR)/)
+    const price = priceMatch ? parseInt(priceMatch[1].replace(/[.,]/g, '')) : undefined
 
     listings.push({
       external_id: `quoka_${idMatch[1]}`,
       title,
+      price_abloese: price && price > 0 && price < 50000 ? price : undefined,
       city: plzCity?.[2]?.trim() ?? 'Unbekannt',
       plz: plzCity?.[1],
       contact_url: url,
@@ -116,10 +124,19 @@ function extractSizeFromTitle(title: string): number | undefined {
 const KLEINGARTEN_KEYWORDS = [
   'kleingarten', 'schrebergarten', 'parzelle', 'laube', 'kgv', 'gartenverein',
   'gartenanlage', 'zu verpachten', 'zu pachten', 'gartenparzelle',
+  'freizeitgrundstück', 'wochenendgrundstück', 'datsche',
+  'gartenkolonie', 'gartenlaube', 'erholungsgarten', 'freizeitgarten',
+  'nachpächter', 'laubengrundstück', 'pachtgarten',
+]
+
+const NEGATIVE_KEYWORDS = [
+  'kindergarten', 'gartenservice', 'gartenpflege', 'gartenbau',
+  'gartenmöbel', 'gartengeräte', 'caravan', 'wohnwagen', 'campingplatz', 'stellplatz',
 ]
 
 function isKleingarten(title: string): boolean {
   const lower = title.toLowerCase()
+  if (NEGATIVE_KEYWORDS.some(kw => lower.includes(kw))) return false
   return KLEINGARTEN_KEYWORDS.some(kw => lower.includes(kw))
 }
 

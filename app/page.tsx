@@ -136,12 +136,8 @@ export default function HomePage() {
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Inserate</span>
-                  <span className="font-medium text-gray-900">{city.listing_count}</span>
-                </div>
-                <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Vereine</span>
-                  <span className="font-medium text-gray-900">{city.verein_count}</span>
+                  <span className="font-medium text-gray-900">{city.verein_count}+</span>
                 </div>
                 {city.avg_abloese && (
                   <div className="flex justify-between text-sm">

@@ -9,12 +9,13 @@ export const metadata: Metadata = {
 }
 
 export default async function VereineDirectoryPage() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('vereine')
     .select('*')
-    .order('warteliste_status', { ascending: true })
-    .limit(100)
+    .order('name', { ascending: true })
+    .limit(200)
 
+  if (error) console.error('Vereine query error:', error.message)
   const vereine = data ?? []
   const cities = CITIES.slice(0, 12)
 
@@ -40,7 +41,7 @@ export default async function VereineDirectoryPage() {
 
       <div className="space-y-3">
         {vereine.length === 0 ? (
-          <p className="text-gray-400 text-sm">Noch keine Vereinsdaten — Scraper läuft bald.</p>
+          <p className="text-gray-400 text-sm">Vereinsdaten werden geladen — bitte kurz warten.</p>
         ) : (
           vereine.map(verein => <VereinCard key={verein.id} verein={verein} />)
         )}

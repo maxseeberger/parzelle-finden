@@ -13,8 +13,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const BASE_URL = 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207'
-const MAX_PAGES = 20
+// Multiple search URLs to maximise coverage across synonym terms
+const SEARCH_URLS: Array<{ url: string; pages: number }> = [
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/kleingarten/k0c207', pages: 20 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/schrebergarten/k0', pages: 10 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/datsche/k0', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/freizeitgrundstück/k0', pages: 10 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/wochenendgrundstück/k0', pages: 5 },
+  { url: 'https://www.kleinanzeigen.de/s-grundstuecke-garten/gartenparzelle/k0', pages: 5 },
+]
 const DELAY_MS = 2500
 
 // PLZ prefix → city mapping (German postal codes, first 3 digits)
@@ -291,10 +298,21 @@ const KLEINGARTEN_KEYWORDS = [
   'gartenverein', 'gartenanlage', 'nutzgarten', 'vereinsgarten',
   'kgv ', ' kgv', 'laube', 'parzelle',
   'zu verpachten', 'zu pachten', 'gartenpacht',
+  'freizeitgrundstück', 'wochenendgrundstück', 'datsche',
+  'gartenkolonie', 'gartenlaube', 'erholungsgarten', 'freizeitgarten',
+  'nachpächter', 'laubengrundstück', 'pachtgarten',
+]
+
+// Titles containing these phrases are NOT garden listings despite matching positive keywords
+const NEGATIVE_KEYWORDS = [
+  'kindergarten', 'gartenservice', 'gartenpflege', 'gartenbau',
+  'gartenmöbel', 'gartengeräte', 'gartenwerkzeug', 'gartenhaus bausatz',
+  'caravan', 'wohnwagen', 'wohnmobil', 'campingplatz', 'stellplatz',
 ]
 
 function isKleingartenListing(title: string): boolean {
   const lower = title.toLowerCase()
+  if (NEGATIVE_KEYWORDS.some(kw => lower.includes(kw))) return false
   return KLEINGARTEN_KEYWORDS.some(kw => lower.includes(kw))
 }
 
@@ -334,27 +352,33 @@ async function deactivateStale(): Promise<void> {
 
 async function main() {
   console.log('🔍 Kleinanzeigen Scraper gestartet —', new Date().toLocaleString('de-DE'))
-
+  const seenIds = new Set<string>() // dedup across search URLs
   let total = 0
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = page === 1 ? BASE_URL : `${BASE_URL}/seite:${page}`
-    console.log(`Seite ${page}/${MAX_PAGES}: ${url}`)
 
-    const html = await fetchPage(url)
-    if (!html) { console.log('Keine Antwort, stoppe.'); break }
+  for (const { url: baseUrl, pages: maxPages } of SEARCH_URLS) {
+    console.log(`\n📋 Suche: ${baseUrl}`)
+    for (let page = 1; page <= maxPages; page++) {
+      const url = page === 1 ? baseUrl : `${baseUrl}/seite:${page}`
+      console.log(`  Seite ${page}/${maxPages}: ${url}`)
 
-    const listings = parseListings(html)
-    console.log(`  → ${listings.length} Inserate gefunden`)
+      const html = await fetchPage(url)
+      if (!html) { console.log('  Keine Antwort, stoppe.'); break }
 
-    if (listings.length === 0) { console.log('Keine Inserate, stoppe.'); break }
+      const listings = parseListings(html)
+      console.log(`  → ${listings.length} Inserate gefunden`)
 
-    for (const listing of listings) {
-      if (!isKleingartenListing(listing.title)) continue
-      await upsertListing(listing)
-      total++
+      if (listings.length === 0) { console.log('  Leer, stoppe.'); break }
+
+      for (const listing of listings) {
+        if (seenIds.has(listing.external_id)) continue
+        seenIds.add(listing.external_id)
+        if (!isKleingartenListing(listing.title)) continue
+        await upsertListing(listing)
+        total++
+      }
+
+      await delay(DELAY_MS)
     }
-
-    await delay(DELAY_MS)
   }
 
   await deactivateStale()
