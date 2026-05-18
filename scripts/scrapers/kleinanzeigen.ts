@@ -496,9 +496,17 @@ const KLEINGARTEN_KEYWORDS = [
 
 // Titles containing these phrases are NOT garden listings despite matching positive keywords
 const NEGATIVE_KEYWORDS = [
+  // Services / products
   'kindergarten', 'gartenservice', 'gartenpflege', 'gartenbau',
-  'gartenmöbel', 'gartengeräte', 'gartenwerkzeug', 'gartenhaus bausatz',
+  'gartenmöbel', 'gartengeräte', 'gartenwerkzeug',
+  // Vehicles / camping
   'caravan', 'wohnwagen', 'wohnmobil', 'campingplatz', 'stellplatz',
+  // Prefab shed/cabin products — the main spam vector
+  'gartenhaus', 'holzhütte', 'blockhütte', 'holzhaus', 'blockhaus',
+  'geräteschuppen', 'gerätehaus', 'unterstand', 'satteldach', 'pultdach',
+  'iso-glas', 'bausatz', 'abholbereit',
+  // Dimension patterns like "44 mm" or "500x400 cm" = product spec, not a garden
+  ' mm ', 'x300 cm', 'x400 cm', 'x260 cm', 'x200 cm',
 ]
 
 function isKleingartenListing(title: string): boolean {
