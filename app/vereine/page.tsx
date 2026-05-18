@@ -31,7 +31,7 @@ export default async function VereineDirectoryPage({
   let query = supabase.from('vereine').select('*')
   if (bundesland) query = query.eq('bundesland', bundesland)
   const { data, error } = await query
-    .order('warteliste_status', { ascending: true })
+    .order('quality_score', { ascending: false })
     .order('name', { ascending: true })
     .range(from, to)
 

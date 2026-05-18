@@ -24,6 +24,7 @@ export interface Verein {
   lat?: number
   lng?: number
   last_updated: string
+  quality_score?: number
 }
 
 export interface Listing {
