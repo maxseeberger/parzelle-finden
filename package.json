@@ -14,7 +14,8 @@
     "scrape:bkd": "tsx scripts/scrapers/bkd.ts",
     "scrape:spider": "tsx scripts/scrapers/verein-spider.ts",
     "scrape:all": "npm run scrape:bkd && npm run scrape:spider && npm run scrape:listings",
-    "notify:alerts": "tsx scripts/notify-alerts.ts"
+    "notify:alerts": "tsx scripts/notify-alerts.ts",
+    "fix:cities": "tsx scripts/fix-unknown-cities.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
