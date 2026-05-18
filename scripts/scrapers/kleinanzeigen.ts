@@ -115,7 +115,7 @@ const PLZ_TO_CITY: Record<string, string> = {
   '404': 'Düsseldorf', '405': 'Düsseldorf', '406': 'Düsseldorf',
   // ─── Duisburg (470–478) ───
   '470': 'Duisburg', '471': 'Duisburg', '472': 'Duisburg', '473': 'Duisburg',
-  '474': 'Duisburg', '475': 'Duisburg', '476': 'Duisburg', '477': 'Duisburg', '478': 'Duisburg',
+  '474': 'Duisburg', '475': 'Duisburg', '476': 'Duisburg',
   // ─── Essen (451–453) ───
   '451': 'Essen', '452': 'Essen', '453': 'Essen',
   // ─── Oberhausen ───
