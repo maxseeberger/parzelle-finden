@@ -96,6 +96,17 @@ export default function VereinCard({ verein, distanceKm }: VereinCardProps) {
 
       {/* Collapsed contact strip */}
       <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-3 flex-wrap" onClick={e => e.stopPropagation()}>
+        {verein.warteliste_url && verein.warteliste_status === 'offen' && (
+          <a
+            href={verein.warteliste_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full text-white"
+            style={{ backgroundColor: 'var(--green-primary)' }}
+          >
+            Jetzt bewerben →
+          </a>
+        )}
         {verein.website && (
           <a
             href={verein.website}
@@ -115,7 +126,7 @@ export default function VereinCard({ verein, distanceKm }: VereinCardProps) {
             <Phone size={11} /> {verein.phone}
           </a>
         )}
-        {!verein.website && !verein.phone && !verein.email && !expanded && (
+        {!verein.warteliste_url && !verein.website && !verein.phone && !verein.email && !expanded && (
           <span className="text-xs text-gray-300">Keine Kontaktdaten</span>
         )}
       </div>

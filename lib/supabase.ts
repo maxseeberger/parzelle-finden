@@ -18,6 +18,7 @@ export interface Verein {
   phone?: string
   email?: string
   warteliste_status: WartelisteStatus
+  warteliste_url?: string
   warteliste_laenge?: number
   parzellen_anzahl?: number
   jahresbeitrag?: number
@@ -29,7 +30,7 @@ export interface Verein {
 
 export interface Listing {
   id: string
-  source: 'kleinanzeigen' | 'verein' | 'manual'
+  source: 'kleinanzeigen' | 'quoka' | 'markt' | 'immowelt'
   external_id?: string
   title: string
   price_abloese?: number
