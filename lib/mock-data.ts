@@ -31,7 +31,7 @@ export const MOCK_LISTINGS: Listing[] = [
   },
   {
     id: '3',
-    source: 'verein',
+    source: 'kleinanzeigen',
     title: 'Freie Parzelle 240m² — KGV Nordend München',
     price_abloese: 3200,
     size_sqm: 240,
