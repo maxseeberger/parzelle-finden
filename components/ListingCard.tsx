@@ -10,8 +10,9 @@ function daysAgo(iso: string): string {
 
 function sourceLabel(source: Listing['source']): string {
   if (source === 'kleinanzeigen') return 'Kleinanzeigen'
-  if (source === 'verein') return 'Direkt'
-  return 'Manuell'
+  if (source === 'quoka') return 'Quoka'
+  if (source === 'markt') return 'Markt.de'
+  return 'Immowelt'
 }
 
 export default function ListingCard({ listing }: { listing: Listing }) {
