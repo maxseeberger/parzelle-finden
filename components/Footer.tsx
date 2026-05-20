@@ -12,38 +12,39 @@ export default function Footer() {
               parzelle-finden.de
             </div>
             <p className="text-sm leading-relaxed">
-              Der einfachste Weg zum eigenen Kleingarten. Freie Parzellen, Vereins-Wartelisten und Ablöse-Preise auf einen Blick.
+              Freie Kleingärten und offene Wartelisten in Deutschland — täglich aktuell aus Kleinanzeigen, Quoka, Markt.de und Immowelt.
             </p>
           </div>
           <div>
-            <h4 className="text-white text-sm font-medium mb-3">Suchen</h4>
+            <h4 className="text-white text-sm font-medium mb-3">Kleingarten finden</h4>
             <ul className="space-y-2 text-sm">
+              <li><Link href="/inserate" className="hover:text-white transition-colors">Freie Parzellen</Link></li>
+              <li><Link href="/wartelisten" className="hover:text-white transition-colors">Offene Wartelisten</Link></li>
               <li><Link href="/kleingarten-berlin" className="hover:text-white transition-colors">Kleingarten Berlin</Link></li>
-              <li><Link href="/kleingarten-hamburg" className="hover:text-white transition-colors">Kleingarten Hamburg</Link></li>
               <li><Link href="/kleingarten-muenchen" className="hover:text-white transition-colors">Kleingarten München</Link></li>
-              <li><Link href="/kleingarten-koeln" className="hover:text-white transition-colors">Kleingarten Köln</Link></li>
+              <li><Link href="/kleingarten-hamburg" className="hover:text-white transition-colors">Kleingarten Hamburg</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white text-sm font-medium mb-3">Ratgeber</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/ratgeber/warteliste" className="hover:text-white transition-colors">Wie funktioniert eine Warteliste?</Link></li>
               <li><Link href="/ratgeber/abloese" className="hover:text-white transition-colors">Was ist eine Ablöse?</Link></li>
-              <li><Link href="/ratgeber/bundeskleingartengesetz" className="hover:text-white transition-colors">Bundeskleingartengesetz</Link></li>
-              <li><Link href="/ratgeber/kosten" className="hover:text-white transition-colors">Was kostet ein Kleingarten?</Link></li>
+              <li><Link href="/ratgeber/warteliste" className="hover:text-white transition-colors">Wie funktioniert eine Warteliste?</Link></li>
+              <li><Link href="/ratgeber" className="hover:text-white transition-colors">Alle Ratgeber-Artikel</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white text-sm font-medium mb-3">Vereine</h4>
+            <h4 className="text-white text-sm font-medium mb-3">Weitere Städte</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/vereine" className="hover:text-white transition-colors">Vereins-Verzeichnis</Link></li>
-              <li><Link href="/warteliste" className="hover:text-white transition-colors">Warteliste eintragen</Link></li>
-              <li><Link href="/abloese" className="hover:text-white transition-colors">Ablöse verstehen</Link></li>
+              <li><Link href="/kleingarten-koeln" className="hover:text-white transition-colors">Kleingarten Köln</Link></li>
+              <li><Link href="/kleingarten-frankfurt" className="hover:text-white transition-colors">Kleingarten Frankfurt</Link></li>
+              <li><Link href="/kleingarten-stuttgart" className="hover:text-white transition-colors">Kleingarten Stuttgart</Link></li>
+              <li><Link href="/kleingarten-leipzig" className="hover:text-white transition-colors">Kleingarten Leipzig</Link></li>
             </ul>
           </div>
         </div>
         <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-3 text-xs">
-          <p>© 2026 parzelle-finden.de — Kein Rechtsanspruch auf Richtigkeit der Daten. Alle Angaben ohne Gewähr.</p>
+          <p>© 2026 parzelle-finden.de — Alle Angaben ohne Gewähr. Daten werden täglich aktualisiert.</p>
           <div className="flex gap-4">
             <Link href="/impressum" className="hover:text-white transition-colors">Impressum</Link>
             <Link href="/datenschutz" className="hover:text-white transition-colors">Datenschutz</Link>

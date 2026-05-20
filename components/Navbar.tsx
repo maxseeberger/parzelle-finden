@@ -10,16 +10,16 @@ export default function Navbar() {
           parzelle-finden.de
         </Link>
         <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
-          <Link href="/vereine" className="hover:text-gray-900 transition-colors">Vereine</Link>
-          <Link href="/inserate" className="hover:text-gray-900 transition-colors">Inserate</Link>
+          <Link href="/inserate" className="hover:text-gray-900 transition-colors">Freie Parzellen</Link>
+          <Link href="/wartelisten" className="hover:text-gray-900 transition-colors">Offene Wartelisten</Link>
           <Link href="/ratgeber" className="hover:text-gray-900 transition-colors">Ratgeber</Link>
         </nav>
         <Link
-          href="/#suche"
+          href="/inserate"
           className="text-sm font-medium text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
           style={{ backgroundColor: 'var(--green-primary)' }}
         >
-          Garten finden
+          Jetzt suchen
         </Link>
       </div>
     </header>

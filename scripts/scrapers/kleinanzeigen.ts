@@ -303,6 +303,24 @@ function cityFromPlz(plz: string): string | undefined {
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+/**
+ * Parse a German-formatted price string into an integer (euros).
+ * Handles: "3.500 €", "€ 3.500", "3500", "3.500,00 €", "3500 VB", etc.
+ * Returns undefined for "Preis auf Anfrage", "VB" alone, or unparseable text.
+ */
+function parseGermanPrice(raw: unknown): number | undefined {
+  if (typeof raw === 'number') return raw > 0 ? Math.round(raw) : undefined
+  const text = String(raw ?? '').trim()
+  if (!text) return undefined
+  // Strip currency symbol, VB/VHB (Verhandlungsbasis), whitespace
+  const stripped = text.replace(/€/g, '').replace(/\bVHB\b/i, '').replace(/\bVB\b/i, '').trim()
+  if (!stripped || /anfrage|kostenlos/i.test(stripped)) return undefined
+  // German: dots are thousands separators, comma is decimal → remove dots, replace comma
+  const normalised = stripped.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '')
+  const val = parseFloat(normalised)
+  return isNaN(val) || val <= 0 ? undefined : Math.round(val)
+}
+
 async function fetchPage(url: string): Promise<string | null> {
   try {
     const controller = new AbortController()
@@ -471,12 +489,13 @@ function parseNextData(html: string, forcedCity?: string): ParsedListing[] {
     const title = String(a.title ?? a.name ?? '').trim()
     if (!adId || !title) continue
 
-    // Price
-    const priceObj = a.price as Record<string, unknown> | undefined
-    const priceAmount = priceObj?.amount ?? priceObj?.value ?? a.price
-    const price = typeof priceAmount === 'number'
-      ? priceAmount
-      : parseInt(String(priceAmount ?? '').replace(/\D/g, '')) || undefined
+    // Price — try all known Kleinanzeigen field variants
+    const priceObj = (typeof a.price === 'object' && a.price !== null)
+      ? a.price as Record<string, unknown>
+      : undefined
+    const rawPrice = priceObj?.amount ?? priceObj?.value ?? priceObj?.priceAmount
+      ?? a.priceAmount ?? a.priceLabel ?? a.priceText ?? (typeof a.price !== 'object' ? a.price : undefined)
+    const price = parseGermanPrice(rawPrice)
 
     // Location — Kleinanzeigen uses locations[] array or address object
     let plz: string | undefined
@@ -536,7 +555,8 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
         const idMatch = String(el.url).match(/\/(\d+)\.html/)
         if (!idMatch) continue
         const adid = idMatch[1]
-        const price = el.offers?.price ? parseInt(String(el.offers.price).replace(/\D/g, '')) : undefined
+        const rawOfferPrice = el.offers?.price ?? el.offers?.priceSpecification?.[0]?.price
+        const price = parseGermanPrice(rawOfferPrice)
         const title = String(el.name).trim()
 
         const loc = locationMap.get(adid)
@@ -576,13 +596,15 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
       ?? extractCityFromText(title)
       ?? 'Unbekannt'
     const snippet = html.slice(m.index ?? 0, (m.index ?? 0) + 1200)
-    const priceMatch = snippet.match(/(\d[\d.]*)\s*€/)
-    const price = priceMatch ? parseInt(priceMatch[1].replace('.', '')) : undefined
+    // Match both "3.500 €" and "€ 3.500" (Kleinanzeigen uses both depending on card type)
+    const priceMatch = snippet.match(/(?:€\s*([\d.,]+)|([\d.,]+)\s*€)/)
+    const rawPrice = priceMatch?.[1] ?? priceMatch?.[2]
+    const price = parseGermanPrice(rawPrice)
 
     listings.push({
       external_id: m[1],
       title,
-      price_abloese: price && price > 0 && price < 100000 ? price : undefined,
+      price_abloese: price && price < 100000 ? price : undefined,
       city,
       plz: loc?.plz,
       contact_url: `https://www.kleinanzeigen.de${m[2]}`,
