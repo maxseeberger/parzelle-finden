@@ -409,6 +409,35 @@ function extractCityFromUrl(url: string): string | undefined {
   return undefined
 }
 
+/**
+ * Extract price per ad-id from HTML card snippets.
+ * Scans known Kleinanzeigen price element classes + generic € patterns.
+ * Used to backfill prices that __NEXT_DATA__ JSON omits.
+ */
+function buildAdidPriceMap(html: string): Map<string, number> {
+  const map = new Map<string, number>()
+  const cardPattern = /data-adid="(\d+)"([\s\S]{0,3000}?)(?=data-adid="|$)/g
+  let m: RegExpExecArray | null
+  while ((m = cardPattern.exec(html)) !== null) {
+    const adid = m[1]
+    const snippet = m[2]
+
+    // 1. Known Kleinanzeigen price class (most reliable)
+    const classMatch = snippet.match(/(?:price-shipping--price|aditem-main--middle--price)[^>]*>([^<]{1,30})</)
+    if (classMatch) {
+      const p = parseGermanPrice(classMatch[1])
+      if (p) { map.set(adid, p); continue }
+    }
+
+    // 2. Generic: "€ 3.500" or "3.500 €" anywhere in card
+    const euroMatch = snippet.match(/(?:€\s*([\d.,]+)|([\d.,]+)\s*€)/)
+    const raw = euroMatch?.[1] ?? euroMatch?.[2]
+    const p = parseGermanPrice(raw)
+    if (p && p < 100000) map.set(adid, p)
+  }
+  return map
+}
+
 function buildAdidLocationMap(html: string): Map<string, { city: string; plz?: string }> {
   // Build a map of adid → {city, plz} by scanning each article card in the HTML.
   const map = new Map<string, { city: string; plz?: string }>()
@@ -536,11 +565,20 @@ function parseNextData(html: string, forcedCity?: string): ParsedListing[] {
 function parseListings(html: string, forcedCity?: string): ParsedListing[] {
   const listings: ParsedListing[] = []
 
+  // Always build price map from HTML cards — used to backfill missing prices
+  const priceMap = buildAdidPriceMap(html)
+
   // 0. Try __NEXT_DATA__ JSON (best structured data, cleanest city/PLZ)
   const nextDataListings = parseNextData(html, forcedCity)
-  if (nextDataListings.length > 0) return nextDataListings
+  if (nextDataListings.length > 0) {
+    // Backfill prices the JSON omitted using card HTML price map
+    return nextDataListings.map(l => ({
+      ...l,
+      price_abloese: l.price_abloese ?? priceMap.get(l.external_id),
+    }))
+  }
 
-  // Pre-build location map from HTML cards so we have city data for every ad
+  // Pre-build location + price maps from HTML cards
   const locationMap = buildAdidLocationMap(html)
 
   // Parse JSON-LD for title/price/date (most reliable structured data)
@@ -571,7 +609,7 @@ function parseListings(html: string, forcedCity?: string): ParsedListing[] {
         listings.push({
           external_id: adid,
           title,
-          price_abloese: price && price > 0 ? price : undefined,
+          price_abloese: (price && price > 0 ? price : undefined) ?? priceMap.get(adid),
           city,
           plz,
           contact_url: `https://www.kleinanzeigen.de/s-anzeige/${adid}.html`,

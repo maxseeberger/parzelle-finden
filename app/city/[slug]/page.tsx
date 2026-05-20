@@ -131,7 +131,10 @@ export default async function CityPage({ params }: Props) {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">Vereinsdaten werden geladen…</p>
+              <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-500">
+                <p className="mb-2 font-medium">Noch keine Vereinsdaten für {city.name}</p>
+                <p className="text-sm">Vereine werden wöchentlich aktualisiert — schau bald wieder rein.</p>
+              </div>
             )}
           </section>
 
